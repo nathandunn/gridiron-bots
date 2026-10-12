@@ -107,7 +107,7 @@ func _headless(args: Dictionary) -> void:
 		_play_lab(red, blue, int(args["plays"]), seed_v, args)
 		get_tree().quit()
 		return
-	var n := int(args.get("sim", "10"))
+	var n := int(args.get("sim", "1"))
 	var games: Array = []
 	var t0 := Time.get_ticks_msec()
 	for i in n:
