@@ -33,7 +33,7 @@ const BODY := {
 	"S": {"speed": 8.8, "accel": 8.5, "power": 0.55, "hands": 0.56, "agility": 0.7, "tackle": 0.7},
 }
 ## Global tuning knobs (set from the command line with --k=name:value,name:value).
-static var K := {"tackle": 0.85, "evade": 0.5, "carry_speed": 0.97, "sight": 1.0, "shed": 1.0, "throw_err": 1.8, "catch": 0.8, "pursuit": 1.05}
+static var K := {"tackle": 0.85, "evade": 0.5, "carry_speed": 0.97, "sight": 1.0, "shed": 1.0, "throw_err": 1.8, "catch": 1.0, "pursuit": 1.05}
 const QB_ARM := 0.9
 const QB_ACC := 0.8
 
@@ -587,8 +587,9 @@ func _act(id: String, a: Array, p: P) -> bool:
 		"juke":
 			if not _is_runner(p) or t < p.juke_cd or _nearest_enemy_d(p, false) > 3.0:
 				return false
-			p.juke_until = t + 0.45
-			p.juke_cd = t + 1.3
+			p.juke_until = t + 0.4
+			p.juke_cd = t + 1.6
+			p.slow_until = maxf(p.slow_until, t + 0.3)   # a juke costs a step
 			var e := _nearest_enemy(p, false)
 			if e != null:
 				var side := signf(p.pos.x - e.pos.x)
@@ -902,7 +903,7 @@ func _open(qb: P, r: P) -> float:
 	for e: P in dfn:
 		if e.down:
 			continue
-		var reach := e.spd() * maxf(T - 0.3 + 0.35 * float(e.body["agility"]) - 0.25, 0.0) * 0.82
+		var reach := e.spd() * maxf(T - 0.35 + 0.3 * float(e.body["agility"]) - 0.25, 0.0) * 0.75
 		if e.engaged != null:
 			reach *= 0.3
 		var m := e.pos.distance_to(c) - reach - REACH * 0.8
@@ -929,7 +930,7 @@ func _best_read(qb: P, need: float, min_depth := -99.0, max_depth := 99.0) -> Di
 		if o < need:
 			continue
 		# reads earlier in the order and further downfield are worth a little more
-		var s := minf(o, 4.0) * (0.6 + 0.4 * qb.d("vision")) - i * 0.35 + clampf(depth, -3.0, 25.0) * (0.08 + 0.08 * qb.d("risk"))
+		var s := minf(o, 4.0) * (0.6 + 0.4 * qb.d("vision")) - i * 0.35 + clampf(depth, -3.0, 25.0) * (0.04 + 0.07 * qb.d("risk"))
 		if s > bs:
 			bs = s
 			best = r
@@ -1004,7 +1005,7 @@ func _throw(qb: P, r: P) -> bool:
 	var c: Vector2 = lc[0]
 	var T: float = lc[1]
 	var dist := qb.pos.distance_to(c)
-	var sigma := (0.3 + 0.03 * dist + 0.0006 * dist * dist) * (1.3 - QB_ACC) * float(K["throw_err"])
+	var sigma := (0.25 + 0.012 * dist + 0.0009 * dist * dist) * (1.3 - QB_ACC) * float(K["throw_err"])
 	if _rusher_d(qb) < 2.0:
 		sigma *= 1.6
 	if scrambling or qb.vel.length() > 3.0:
@@ -1275,7 +1276,7 @@ func _qb_default(p: P) -> void:
 	p.mem["_next_qb"] = t + BRAIN_EVERY
 	if reads.is_empty():
 		reads = ["WR1", "WR2", "WR3", "TE", "RB"]
-	var need := 1.7 - 1.3 * p.d("risk")
+	var need := 1.2 - 1.2 * p.d("risk")
 	var per_read := 0.45 + 0.35 * p.d("patience")
 	if t - read_t > per_read:
 		read_t = t
@@ -1948,7 +1949,7 @@ func _resolve_blocks() -> void:
 		var dirE := (goal - e.pos).normalized()
 		var bpow := 0.0
 		for x: P in bl:
-			bpow += float(x.body["power"]) * (1.15 if x.intent == "drive_block" else 1.0)
+			bpow += float(x.body["power"]) * (1.08 if x.intent == "drive_block" else 1.0)
 		var epow := float(e.body["power"]) * (1.15 if e.intent == "bull_rush" else 1.0)
 		var double := bl.size() >= 2
 		var run_block := not pass_play or handed or ball_out_of_qb()
@@ -2133,7 +2134,7 @@ func _arrive() -> void:
 			best_o = p
 	if best_d != null:
 		var q := 1.0 - dd / REACH
-		var p_int := float(best_d.body["hands"]) * 0.3 * q
+		var p_int := float(best_d.body["hands"]) * 0.42 * q
 		if best_d.intent in ["play_ball", "jump_route"]:
 			p_int *= 1.35
 		if best_o == null:
@@ -2151,7 +2152,7 @@ func _arrive() -> void:
 		_say("nobody there (target %s %.1f yd away)" % [tr.slot if tr != null else "-", tr.pos.distance_to(to) if tr != null else -1.0])
 	if best_o != null:
 		var q := 1.0 - od / REACH
-		var pc := (0.78 + 0.2 * float(best_o.body["hands"])) * (0.6 + 0.4 * q) * float(K["catch"])
+		var pc := (0.86 + 0.12 * float(best_o.body["hands"])) * (0.7 + 0.3 * q) * float(K["catch"])
 		if best_d != null:
 			pc *= 0.85
 		if best_o.manner.get("secure", false):
@@ -2238,12 +2239,14 @@ func _contacts() -> void:
 			p *= 0.3
 		if e.manner.get("wrap_up", false):
 			p += 0.12
+		if c.manner.get("lower_shoulder", false):
+			p -= 0.15 * clampf(float(c.body["power"]) - float(e.body["power"]) + 0.3, 0.0, 1.0)
 		if e.manner.get("hit_hard", false):
 			p -= 0.05
 		if e.manner.get("strip", false):
 			p -= 0.15
 		if t < c.juke_until:
-			p -= 0.38 * float(c.body["agility"])
+			p -= 0.26 * float(c.body["agility"])
 		if t < c.stiff_until:
 			p -= 0.25 * clampf(float(c.body["power"]) - float(e.body["power"]) + 0.6, 0.0, 1.0)
 		if c.slot == "QB" and not handed and c.pos.y < 0.5:

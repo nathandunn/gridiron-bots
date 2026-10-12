@@ -172,6 +172,11 @@ static func _parse_not(toks: Array, pos: Array, ln: int, table: Array, errors: A
 			pos[0] += 1
 		else:
 			errors.append("line %d: a '(' without its ')'" % ln)
+		# "(a or b) for 2s": the whole group must have held that long
+		if pos[0] + 1 < toks.size() and toks[pos[0]] == "for" and _is_seconds(toks[pos[0] + 1]):
+			var held := num(toks[pos[0] + 1])
+			pos[0] += 2
+			return ["for", inner, held, "%d:group%d" % [ln, pos[0]]]
 		return inner
 	var atom := []
 	while pos[0] < toks.size() and not ["and", "or", ")"].has(toks[pos[0]]):

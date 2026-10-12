@@ -1,9 +1,8 @@
 ai "Pass Protector"
-about "Sets deep, helps inside, picks up the blitzer."
+about "Sets deep and picks up the blitzer before anyone else."
 position OL
 dials aggression 0.3 discipline 0.85
 
 rules:
   when pass play and before the throw and free -> pick up the blitz
-  when pass play and before the throw and free -> double team
   otherwise -> follow assignment
