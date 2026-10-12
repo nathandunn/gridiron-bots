@@ -1,0 +1,10 @@
+play "QB Sneak"
+about "Short yardage: the quarterback pushes behind the center."
+side offense
+kind run
+formation under center
+QB: run sneak
+RB: block lead
+OL: block run
+TE: block
+WR: block

@@ -1,0 +1,12 @@
+play "PA Deep Shot"
+about "Fake the run to freeze the linebackers, then a post and a dig behind them."
+side offense
+kind pass
+formation under center
+QB: play action drop 7 read WR2 WR1 TE RB
+RB: route flat
+WR1: route dig 14
+WR2: route post 12
+WR3: route curl 12
+TE: route cross 9
+OL: block pass

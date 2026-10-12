@@ -1,0 +1,11 @@
+play "Four Verticals"
+about "Everybody goes deep; the back checks down underneath."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 7 read WR3 TE WR1 WR2 RB
+RB: route swing
+WR: route go
+WR3: route seam
+TE: route seam
+OL: block pass

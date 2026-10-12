@@ -1,0 +1,11 @@
+ai "Power Back"
+about "Downhill. Hits the hole, lowers the shoulder, falls forward."
+position RB
+dials vision 0.45 patience 0.35 aggression 0.85 discipline 0.6
+
+rules:
+  when with the ball and enemy within 1.6 -> lower shoulder; protect the ball
+  when with the ball and blocker ahead -> follow my blocker
+  when with the ball -> cut upfield
+  when before the throw and assignment is block -> pick up the blitz
+  otherwise -> follow assignment

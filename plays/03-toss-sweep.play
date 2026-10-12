@@ -1,0 +1,11 @@
+play "Toss Sweep"
+about "Pitch it wide left and race for the edge behind a pulling guard."
+side offense
+kind run
+formation shotgun
+QB: handoff
+RB: run sweep left
+OL: block run
+RG: pull left
+TE: block
+WR: block

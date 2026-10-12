@@ -1,0 +1,728 @@
+class_name Hud
+extends CanvasLayer
+## Everything on screen that isn't the field, built in code and sized for a phone: the
+## scoreboard, the controls, and the panels - teams and brains, the rule editor, the play log,
+## a game's box score and a batch of simulated games.
+
+var main: Node
+var _root: Control
+var _score := [null, null]
+var _clock: Label
+var _sit: Label
+var _call: Label
+var _result: Label
+var _pause_btn: Button
+var _speed_btns := {}
+var _view_btn: Button
+var _overlay: Control = null
+var _toast: Label
+var _toast_t := 0.0
+var _progress: Label
+var fs := 15                 # base font size
+
+# editor state
+var _ed_kind := "ai"
+var _ed_name := ""
+var _ed_text: CodeEdit
+var _ed_status: RichTextLabel
+var _ed_words_mode := "conditions"
+var _ed_names_box: HFlowContainer
+var _ed_words_box: HFlowContainer
+var _ed_example: Label
+
+const KIND_LABEL := {"coach": "Coaches", "play": "Plays", "ai": "Position brains"}
+const PLAY_HELP := """Assignments, one line per position (OL, WR, DL, LB, CB, S set the whole group):
+QB: pass drop 3|5|7 read WR1 WR2 ... · play action drop 7 read ... · handoff · run sneak
+RB: run inside left|inside right|middle|outside left|outside right|sweep left|sweep right|draw
+    route NAME [depth] · block · block lead
+WR/TE: route NAME [depth] · block then route NAME · block
+   routes: go fade slant out in dig post corner hitch curl comeback flat seam drag cross wheel screen swing angle stop
+OL: block · pull left|right
+DL/LB/CB/S: rush · rush contain · blitz · man WR1|WR2|WR3|TE|RB · spy
+   zone deep third left|middle|right · deep half left|right · deep middle · flat left|right
+        hook left|middle|right · curl left|right · robber
+Header: play "Name" · about "..." · side offense|defense · kind pass|run|man|zone|blitz
+        formation shotgun|under center|pistol|empty · front even|press|off|goal line"""
+
+
+func setup(m: Node) -> void:
+	main = m
+	var vp := get_viewport().get_visible_rect().size
+	fs = 15 if vp.x > 700 else 14
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.theme = _make_theme()
+	add_child(_root)
+	_build_scoreboard()
+	_build_controls()
+	_toast = Label.new()
+	_toast.set_anchors_preset(Control.PRESET_CENTER)
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.add_theme_font_size_override("font_size", fs + 10)
+	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
+	_toast.add_theme_constant_override("outline_size", 8)
+	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast.visible = false
+	_root.add_child(_toast)
+
+
+func _make_theme() -> Theme:
+	var th := Theme.new()
+	th.default_font_size = fs
+	var mk := func(bg: Color, border: Color) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = bg
+		sb.border_color = border
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(7)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+		return sb
+	th.set_stylebox("normal", "Button", mk.call(Color(0.14, 0.16, 0.2, 0.92), Color(0.55, 0.58, 0.62)))
+	th.set_stylebox("hover", "Button", mk.call(Color(0.22, 0.25, 0.3, 0.95), Color(0.85, 0.85, 0.85)))
+	th.set_stylebox("pressed", "Button", mk.call(Color(0.93, 0.8, 0.3), Color(1, 0.95, 0.7)))
+	th.set_stylebox("hover_pressed", "Button", mk.call(Color(0.97, 0.85, 0.4), Color(1, 0.95, 0.7)))
+	th.set_stylebox("disabled", "Button", mk.call(Color(0.1, 0.11, 0.13, 0.8), Color(0.3, 0.3, 0.3)))
+	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
+	th.set_color("font_pressed_color", "Button", Color(0.08, 0.07, 0.03))
+	th.set_color("font_hover_pressed_color", "Button", Color(0.08, 0.07, 0.03))
+	var panel := StyleBoxFlat.new()
+	panel.bg_color = Color(0.07, 0.08, 0.1, 0.96)
+	panel.border_color = Color(0.45, 0.48, 0.52)
+	panel.set_border_width_all(1)
+	panel.set_corner_radius_all(10)
+	panel.set_content_margin_all(12)
+	th.set_stylebox("panel", "PanelContainer", panel)
+	return th
+
+
+func _label(text: String, size := 0, color := Color(0.93, 0.93, 0.9)) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size if size > 0 else fs)
+	l.add_theme_color_override("font_color", color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+
+func _button(text: String, cb: Callable, toggle := false) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.toggle_mode = toggle
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.pressed.connect(cb)
+	return b
+
+
+## ---- scoreboard ----------------------------------------------------------------------------
+
+func _build_scoreboard() -> void:
+	var top := PanelContainer.new()
+	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top.offset_left = 8
+	top.offset_right = -8
+	top.offset_top = 46
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.06, 0.08, 0.78)
+	sb.set_corner_radius_all(9)
+	sb.set_content_margin_all(8)
+	top.add_theme_stylebox_override("panel", sb)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(top)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	top.add_child(v)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_child(row)
+	for t in 2:
+		var l := _label("", fs + 6, FieldView.COLORS[t].lightened(0.35))
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if t == 0 else HORIZONTAL_ALIGNMENT_RIGHT
+		_score[t] = l
+		if t == 1:
+			_clock = _label("", fs + 2)
+			_clock.autowrap_mode = TextServer.AUTOWRAP_OFF
+			_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			row.add_child(_clock)
+		row.add_child(l)
+	row.move_child(_score[0], 0)
+	_sit = _label("", fs, Color(1, 0.9, 0.55))
+	_sit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_sit)
+	_call = _label("", fs - 2, Color(0.8, 0.85, 0.9))
+	_call.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_call)
+	_result = _label("", fs - 1, Color(1, 1, 1))
+	_result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_result)
+	_progress = _label("", fs - 1, Color(0.7, 1, 0.7))
+	_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_progress.visible = false
+	v.add_child(_progress)
+
+
+func show_state(g: Game) -> void:
+	for t in 2:
+		var ball := " 🏈" if g.poss == t and not g.over else ""
+		var cn: String = (g.teams[t]["coach"] as Coach).name
+		_score[t].text = ("%s %d%s" % [cn, g.score[t], ball]) if t == 0 else ("%s%s %d" % [ball, cn, g.score[t]])
+	var s := maxi(int(g.clock), 0)
+	_clock.text = "Final" if g.over else "Q%d %d:%02d" % [g.quarter, s / 60, s % 60]
+	_sit.text = "" if g.over else "%s ball · %s" % [g.teams[g.poss]["name"], g.situation()]
+
+
+func show_call(text: String) -> void:
+	_call.text = text
+
+
+func show_result(text: String) -> void:
+	_result.text = text
+
+
+func toast(text: String, secs := 1.6) -> void:
+	_toast.text = text
+	_toast.visible = true
+	_toast.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - _toast.size.x * 0.5, get_viewport().get_visible_rect().size.y * 0.42)
+	_toast_t = secs
+
+
+func set_progress(text: String) -> void:
+	_progress.text = text
+	_progress.visible = text != ""
+
+
+func _process(delta: float) -> void:
+	if _toast_t > 0.0:
+		_toast_t -= delta
+		_toast.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - _toast.size.x * 0.5, get_viewport().get_visible_rect().size.y * 0.42)
+		if _toast_t <= 0.0:
+			_toast.visible = false
+
+
+## ---- controls ------------------------------------------------------------------------------
+
+func _build_controls() -> void:
+	var bar := HFlowContainer.new()
+	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.offset_left = 8
+	bar.offset_right = -8
+	bar.offset_bottom = -10
+	bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	bar.alignment = FlowContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("h_separation", 6)
+	bar.add_theme_constant_override("v_separation", 6)
+	_root.add_child(bar)
+	_pause_btn = _button("⏸", func(): main.toggle_pause())
+	bar.add_child(_pause_btn)
+	for s in [1.0, 2.0, 4.0, 8.0]:
+		var b := _button("%d×" % int(s), func(): main.set_speed(s), true)
+		_speed_btns[s] = b
+		bar.add_child(b)
+	bar.add_child(_button("⏭ Drive", func(): main.skip_drive()))
+	_view_btn = _button("🎥 Behind", func(): _view_btn.text = "🎥 " + main.next_view())
+	bar.add_child(_view_btn)
+	bar.add_child(_button("Teams", func(): open_teams()))
+	bar.add_child(_button("Edit AI", func(): open_editor()))
+	bar.add_child(_button("Sim ×10", func(): main.run_batch(10)))
+	bar.add_child(_button("Log", func(): open_log()))
+	bar.add_child(_button("New game", func(): main.new_game()))
+	mark_speed(1.0)
+
+
+func mark_speed(s: float) -> void:
+	for k in _speed_btns:
+		_speed_btns[k].button_pressed = is_equal_approx(k, s)
+
+
+func mark_paused(p: bool) -> void:
+	_pause_btn.text = "▶" if p else "⏸"
+
+
+func mark_view(v: String) -> void:
+	_view_btn.text = "🎥 " + v
+
+
+## ---- overlays ------------------------------------------------------------------------------
+
+func any_overlay() -> bool:
+	return _overlay != null and is_instance_valid(_overlay)
+
+
+func close_overlay() -> void:
+	if any_overlay():
+		_overlay.queue_free()
+	_overlay = null
+	main.overlay_changed(false)
+
+
+## A panel over the field: returns its content box.
+func _open(title: String) -> VBoxContainer:
+	close_overlay()
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(dim)
+	_overlay = dim
+	var vp := get_viewport().get_visible_rect().size
+	var w := minf(vp.x - 16.0, 900.0)
+	var pc := PanelContainer.new()
+	pc.position = Vector2((vp.x - w) * 0.5, 40)
+	pc.custom_minimum_size = Vector2(w, vp.y - 60)
+	pc.size = Vector2(w, vp.y - 60)
+	dim.add_child(pc)
+	var outer := VBoxContainer.new()
+	pc.add_child(outer)
+	var head := HBoxContainer.new()
+	outer.add_child(head)
+	var tl := _label(title, fs + 4, Color(1, 0.9, 0.55))
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(tl)
+	head.add_child(_button("✕ Close", func(): close_overlay()))
+	var sc := ScrollContainer.new()
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(sc)
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 8)
+	sc.add_child(box)
+	main.overlay_changed(true)
+	return box
+
+
+func _section(box: Control, text: String) -> void:
+	var l := _label(text, fs + 1, Color(1, 0.85, 0.45))
+	box.add_child(l)
+
+
+func _chips(box: Control, names: Array, current: String, cb: Callable) -> HFlowContainer:
+	var f := HFlowContainer.new()
+	f.add_theme_constant_override("h_separation", 6)
+	f.add_theme_constant_override("v_separation", 6)
+	for n in names:
+		var b := _button(String(n), func(): cb.call(n), true)
+		b.button_pressed = n == current
+		f.add_child(b)
+	box.add_child(f)
+	return f
+
+
+## ---- teams and brains ----------------------------------------------------------------------
+
+var _teams_side := 0
+
+
+func open_teams() -> void:
+	var box := _open("Teams, coaches and brains")
+	box.add_child(_label("Each side has a coach (who calls the plays) and a brain at every position (how each player plays them). \"Coach's pick\" uses the brain in the coach's lineup.", fs - 1, Color(0.8, 0.82, 0.85)))
+	var sides := HBoxContainer.new()
+	box.add_child(sides)
+	for t in 2:
+		var b := _button("%s side" % Team.NAMES[t], func(): _teams_side = t; open_teams(), true)
+		b.button_pressed = _teams_side == t
+		b.add_theme_color_override("font_color", FieldView.COLORS[t].lightened(0.4))
+		sides.add_child(b)
+	var t: int = _teams_side
+	_section(box, "Coach")
+	var cur: String = main.coaches[t]
+	_chips(box, Library.names("coach"), cur, func(n): main.coaches[t] = n; open_teams())
+	var c: Coach = Library.coach(cur)
+	if c != null:
+		box.add_child(_label(c.about, fs - 1, Color(0.8, 0.82, 0.85)))
+	_section(box, "Brains by position")
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 6)
+	box.add_child(grid)
+	for g in Brain.GROUPS:
+		var gl := _label(g, fs, Color(0.85, 0.9, 1))
+		gl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		gl.custom_minimum_size.x = 34
+		grid.add_child(gl)
+		var ob := OptionButton.new()
+		ob.focus_mode = Control.FOCUS_NONE
+		ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var coach_pick: String = c.lineup.get(g, "") if c != null else ""
+		if coach_pick == "":
+			var opts0 := Library.brains_for(g)
+			coach_pick = opts0[0] if not opts0.is_empty() else "-"
+		ob.add_item("Coach's pick (%s)" % coach_pick)
+		var opts := Library.brains_for(g)
+		var sel := 0
+		for i in opts.size():
+			ob.add_item(String(opts[i]))
+			if main.picks[t].get(g, "") == opts[i]:
+				sel = i + 1
+		ob.select(sel)
+		ob.item_selected.connect(func(idx):
+			if idx == 0:
+				main.picks[t].erase(g)
+			else:
+				main.picks[t][g] = opts[idx - 1]
+			_brain_about(g, t))
+		grid.add_child(ob)
+	_section(box, "Game length")
+	var q := [["3 min quarters", 180.0], ["5 min", 300.0], ["8 min", 480.0], ["15 min (full)", 900.0]]
+	var qf := HFlowContainer.new()
+	qf.add_theme_constant_override("h_separation", 6)
+	box.add_child(qf)
+	for e in q:
+		var b := _button(e[0], func(): main.qlen = e[1]; open_teams(), true)
+		b.button_pressed = is_equal_approx(main.qlen, e[1])
+		qf.add_child(b)
+	var go := _button("▶ Kick off with these teams", func(): close_overlay(); main.new_game())
+	go.add_theme_font_size_override("font_size", fs + 2)
+	box.add_child(go)
+
+
+func _brain_about(g: String, t: int) -> void:
+	var n: String = main.picks[t].get(g, "")
+	if n != "":
+		var b: Brain = Library.brain(n)
+		if b != null:
+			toast("%s: %s" % [b.name, b.about], 3.0)
+
+
+## ---- the rule editor -----------------------------------------------------------------------
+
+func open_editor(kind := "", name := "") -> void:
+	if kind != "":
+		_ed_kind = kind
+	if name != "":
+		_ed_name = name
+	var box := _open("Edit the AI")
+	box.add_child(_label("Every coach, play and position brain is a short rule file. Rules are read top to bottom; the first that holds decides. Tap a word below to insert it; type a space for suggestions.", fs - 1, Color(0.8, 0.82, 0.85)))
+	var kinds := HFlowContainer.new()
+	kinds.add_theme_constant_override("h_separation", 6)
+	box.add_child(kinds)
+	for k in ["ai", "coach", "play"]:
+		var b := _button(KIND_LABEL[k], func(): _ed_kind = k; _ed_name = ""; open_editor(), true)
+		b.button_pressed = _ed_kind == k
+		kinds.add_child(b)
+	var names := Library.names(_ed_kind)
+	if _ed_name == "" or not names.has(_ed_name):
+		_ed_name = names[0] if not names.is_empty() else ""
+	_ed_names_box = HFlowContainer.new()
+	_ed_names_box.add_theme_constant_override("h_separation", 5)
+	_ed_names_box.add_theme_constant_override("v_separation", 5)
+	box.add_child(_ed_names_box)
+	for n in names:
+		var label := String(n)
+		if _ed_kind == "ai":
+			label = "%s · %s" % [(Library.brain(n) as Brain).group, n]
+		if Library.is_edited(_ed_kind, n):
+			label += " ✎"
+		var b := _button(label, func(): _ed_name = n; open_editor(), true)
+		b.button_pressed = n == _ed_name
+		b.add_theme_font_size_override("font_size", fs - 2)
+		_ed_names_box.add_child(b)
+	_ed_text = CodeEdit.new()
+	_ed_text.text = Library.source(_ed_kind, _ed_name)
+	_ed_text.custom_minimum_size = Vector2(0, maxf(get_viewport().get_visible_rect().size.y * 0.42, 240))
+	_ed_text.add_theme_font_size_override("font_size", fs - 1)
+	_ed_text.gutters_draw_line_numbers = true
+	_ed_text.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_ed_text.code_completion_enabled = true
+	_ed_text.code_completion_prefixes = [" "]
+	_ed_text.code_completion_requested.connect(_on_completion)
+	_ed_text.syntax_highlighter = _highlighter()
+	_ed_text.text_changed.connect(func(): _lint_live())
+	box.add_child(_ed_text)
+	_ed_status = RichTextLabel.new()
+	_ed_status.bbcode_enabled = true
+	_ed_status.fit_content = true
+	_ed_status.add_theme_font_size_override("normal_font_size", fs - 1)
+	box.add_child(_ed_status)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 6)
+	box.add_child(row)
+	row.add_child(_button("✓ Check", func(): _lint_live(true)))
+	row.add_child(_button("💾 Save", func(): _save()))
+	row.add_child(_button("↺ Reset to shipped", func(): Library.reset(_ed_kind, _ed_name); open_editor()))
+	row.add_child(_button("⧉ Copy as new", func(): _copy_as_new()))
+	row.add_child(_button("▶ Save & play", func(): if _save(): close_overlay(); main.new_game()))
+	# the words
+	if _ed_kind == "play":
+		_section(box, "Play syntax")
+		var ph := _label(PLAY_HELP, fs - 2, Color(0.85, 0.88, 0.9))
+		box.add_child(ph)
+	else:
+		_section(box, "Words (tap to insert)")
+		var wm := HBoxContainer.new()
+		box.add_child(wm)
+		for m in ["conditions", "actions", "dials" if _ed_kind == "ai" else "lineup"]:
+			var b := _button(m.capitalize(), func(): _ed_words_mode = m; _fill_words(), true)
+			b.button_pressed = _ed_words_mode == m
+			wm.add_child(b)
+		_ed_example = _label("", fs - 1, Color(0.7, 1, 0.75))
+		box.add_child(_ed_example)
+		_ed_words_box = HFlowContainer.new()
+		_ed_words_box.add_theme_constant_override("h_separation", 5)
+		_ed_words_box.add_theme_constant_override("v_separation", 5)
+		box.add_child(_ed_words_box)
+		_fill_words()
+	_lint_live()
+
+
+func _highlighter() -> CodeHighlighter:
+	var h := CodeHighlighter.new()
+	h.number_color = Color(0.7, 0.9, 1.0)
+	h.symbol_color = Color(0.8, 0.8, 0.8)
+	h.function_color = Color(0.9, 0.9, 0.9)
+	h.member_variable_color = Color(0.9, 0.9, 0.9)
+	for w in ["when", "otherwise", "and", "or", "not", "for"]:
+		h.add_keyword_color(w, Color(1.0, 0.6, 0.35))
+	for w in ["ai", "about", "position", "dials", "rules", "coach", "offense", "defense", "lineup", "play", "side", "kind", "formation", "front"]:
+		h.add_keyword_color(w, Color(0.6, 0.8, 1.0))
+	h.add_color_region("#", "", Color(0.5, 0.6, 0.5), true)
+	h.add_color_region("\"", "\"", Color(0.95, 0.85, 0.5))
+	return h
+
+
+func _fill_words() -> void:
+	for c in _ed_words_box.get_children():
+		c.queue_free()
+	var tables := Library.tables(_ed_kind)
+	var items: Array = []
+	match _ed_words_mode:
+		"conditions":
+			items = RuleHelp.phrases(tables["conditions"])
+		"actions":
+			items = RuleHelp.phrases(tables["actions"])
+		"dials":
+			for d in Brain.DIALS:
+				items.append({"phrase": "%s 0.5" % d, "help": Brain.DIAL_HELP[d]})
+		"lineup":
+			for g in Brain.GROUPS:
+				var opts := Library.brains_for(g)
+				for o in opts:
+					items.append({"phrase": "%s \"%s\"" % [g, o]})
+	for it in items:
+		var phrase: String = it["phrase"]
+		var b := _button(phrase, func(): _insert(phrase, it))
+		b.add_theme_font_size_override("font_size", fs - 2)
+		_ed_words_box.add_child(b)
+	var ex := ""
+	if _ed_kind == "ai":
+		ex = "e.g.  when with the ball and one man to beat -> juke\n      when before the throw and pressure and checkdown open -> check down"
+	elif _ed_kind == "coach":
+		ex = "e.g.  when third down and to go over 7 -> call \"Smash\" or \"Four Verticals\"\n      when \"Power\" averaging over 5 and chance 50% -> call \"Power\""
+	_ed_example.text = ex
+
+
+func _insert(phrase: String, it: Dictionary) -> void:
+	var text := phrase.replace("N%", "40%").replace("Ns", "2s").replace(" N", " 5").replace("WORD", "wr1").replace("\"NAME\"", "\"Smash\"")
+	_ed_text.insert_text_at_caret(text + " ")
+	_ed_text.grab_focus()
+	if it.has("help"):
+		_ed_example.text = String(it["help"])
+	else:
+		var verb := "when %s -> ..." % text if _ed_words_mode == "conditions" else "when ... -> %s" % text
+		_ed_example.text = "e.g.  " + verb
+
+
+## Completion: after a space, offer the phrases that continue what is being typed.
+func _on_completion() -> void:
+	var tables := Library.tables(_ed_kind)
+	if tables.is_empty():
+		return
+	var line := _ed_text.get_line(_ed_text.get_caret_line()).substr(0, _ed_text.get_caret_column()).to_lower()
+	var after_arrow := line.find("->") >= 0
+	var cut := 0
+	for sep in ["when ", " and ", " or ", "not ", "->", ";", "("]:
+		var k := line.rfind(sep)
+		if k >= 0:
+			cut = maxi(cut, k + sep.length())
+	var frag := line.substr(cut).strip_edges(true, false)
+	var table: Array = tables["actions"] if after_arrow else tables["conditions"]
+	var word_start := frag.rfind(" ") + 1
+	for ph in RuleHelp.complete(frag, table, 12):
+		var rest := ph.substr(word_start) if ph.begins_with(frag) else ph
+		_ed_text.add_code_completion_option(CodeEdit.KIND_PLAIN_TEXT, ph, rest)
+	_ed_text.update_code_completion_options(true)
+
+
+func _lint_live(loud := false) -> void:
+	var errs := Library.lint(_ed_kind, _ed_text.text)
+	if errs.is_empty():
+		_ed_status.text = "[color=#8f8]✓ Reads cleanly.[/color]" + ("" if not loud else " Save to use it.")
+	else:
+		var s := "[color=#f99]"
+		for e in errs.slice(0, 6):
+			s += "• " + e.replace("[", "(").replace("]", ")") + "\n"
+		_ed_status.text = s + "[/color]"
+
+
+func _save() -> bool:
+	var r := Library.save(_ed_kind, _ed_text.text)
+	if not (r[0] as Array).is_empty():
+		_lint_live(true)
+		toast("Not saved - fix the problems first", 2.0)
+		return false
+	_ed_name = r[1]
+	toast("Saved \"%s\" - used from the next snap" % _ed_name, 2.0)
+	main.library_changed()
+	open_editor()
+	return true
+
+
+func _copy_as_new() -> void:
+	var text := _ed_text.text
+	var head: String = {"ai": "ai ", "coach": "coach ", "play": "play "}[_ed_kind]
+	var lines := text.split("\n")
+	for i in lines.size():
+		if lines[i].strip_edges().to_lower().begins_with(head):
+			var n := Dsl.quoted(lines[i].strip_edges().substr(head.length()))
+			lines[i] = "%s\"%s (mine)\"" % [head, n]
+			break
+	_ed_text.text = "\n".join(lines)
+	_lint_live()
+	toast("Renamed - Save to keep it as a new one", 2.0)
+
+
+## ---- the log and results ------------------------------------------------------------------
+
+func open_log() -> void:
+	var box := _open("Play by play")
+	var g: Game = main.game
+	if g == null:
+		return
+	var entries: Array = g.log.slice(maxi(0, g.log.size() - 120))
+	entries.reverse()
+	for e in entries:
+		var s := maxi(int(e["clock"]), 0)
+		var who := ""
+		if e.has("team"):
+			who = Team.NAMES[int(e["team"])] + " · " + ["", "1st", "2nd", "3rd", "4th"][clampi(int(e["down"]), 1, 4)] + " & " + str(maxi(int(round(float(e["to_go"]))), 1)) + " · "
+		var l := _label("Q%d %d:%02d  %d-%d   %s%s" % [e["q"], s / 60, s % 60, e["score"][0], e["score"][1], who, e["text"]], fs - 2)
+		box.add_child(l)
+
+
+func show_game_over(g: Game) -> void:
+	var box := _open("Final")
+	var w := g.winner()
+	var head := "Tie game" if w < 0 else "%s win" % (g.teams[w]["coach"] as Coach).name
+	box.add_child(_label("%s   %s %d - %d %s" % [head, (g.teams[0]["coach"] as Coach).name, g.score[0], g.score[1], (g.teams[1]["coach"] as Coach).name], fs + 3))
+	_box_score(box, g.stats, [1, 1], [(g.teams[0]["coach"] as Coach).name, (g.teams[1]["coach"] as Coach).name])
+	_section(box, "Play calls (calls · yards a call)")
+	for t in 2:
+		box.add_child(_label(_calls_line(g.calls[t], Team.NAMES[t]), fs - 2))
+	_section(box, "Drives")
+	var ds := []
+	for d in g.drives:
+		ds.append("%s: %d plays, %d yds, %s" % [Team.NAMES[int(d["team"])], int(d["plays"]), int(round(float(d["yards"]))), d["result"]])
+	box.add_child(_label("\n".join(ds), fs - 2))
+	var bt: Array = g.get_meta("brain_tally", [{}, {}])
+	_rules_section(box, bt, g.coach_tally, [g.teams[0]["coach"], g.teams[1]["coach"]])
+	var row := HFlowContainer.new()
+	box.add_child(row)
+	row.add_child(_button("▶ Play again", func(): close_overlay(); main.new_game()))
+	row.add_child(_button("Sim ×10 these teams", func(): close_overlay(); main.run_batch(10)))
+
+
+func _calls_line(calls: Dictionary, who: String) -> String:
+	var parts := []
+	var names := calls.keys()
+	names.sort_custom(func(a, b): return calls[a][0] > calls[b][0])
+	for n in names:
+		parts.append("%s %d · %.1f" % [n, calls[n][0], float(calls[n][1]) / maxf(float(calls[n][0]), 1.0)])
+	return "%s: %s" % [who, ",  ".join(parts)]
+
+
+func _box_score(box: Control, stats: Array, per: Array, names: Array) -> void:
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 18)
+	box.add_child(g)
+	var rows := [["", names[0], names[1]]]
+	var f := func(t: int, k: String) -> float: return float(stats[t].get(k, 0.0)) / float(per[t])
+	rows.append(["Points" if per[0] == 1 else "Points a game", "", ""])
+	rows.append(["Plays", "%.1f" % f.call(0, "plays"), "%.1f" % f.call(1, "plays")])
+	rows.append(["Yards", "%.0f" % f.call(0, "yards"), "%.0f" % f.call(1, "yards")])
+	rows.append(["Passing", _pass_line(stats[0], per[0]), _pass_line(stats[1], per[1])])
+	rows.append(["Rushing", _rush_line(stats[0], per[0]), _rush_line(stats[1], per[1])])
+	rows.append(["Sacks taken", "%.1f" % f.call(0, "sacks"), "%.1f" % f.call(1, "sacks")])
+	rows.append(["Turnovers", "%.1f" % f.call(0, "turnovers"), "%.1f" % f.call(1, "turnovers")])
+	rows.append(["3rd down", _rate(stats[0], "third_conv", "third_att"), _rate(stats[1], "third_conv", "third_att")])
+	rows.append(["Big plays (20+)", "%.1f" % f.call(0, "explosive"), "%.1f" % f.call(1, "explosive")])
+	rows.append(["Punts", "%.1f" % f.call(0, "punts"), "%.1f" % f.call(1, "punts")])
+	rows.append(["Field goals", "%.1f/%.1f" % [f.call(0, "fg"), f.call(0, "fg_att")], "%.1f/%.1f" % [f.call(1, "fg"), f.call(1, "fg_att")]])
+	rows.remove_at(1)
+	for r in rows:
+		for i in 3:
+			var l := _label(String(r[i]), fs - 1, Color(1, 0.85, 0.45) if i == 0 or r == rows[0] else Color(0.93, 0.93, 0.9))
+			l.autowrap_mode = TextServer.AUTOWRAP_OFF
+			g.add_child(l)
+
+
+func _pass_line(s: Dictionary, n: int) -> String:
+	var att := float(s.get("pass_att", 0))
+	return "%.0f/%.0f, %.0f yds (%.1f a throw)" % [float(s.get("comp", 0)) / n, att / n, float(s.get("pass_yds", 0)) / n, float(s.get("pass_yds", 0)) / maxf(att, 1.0)]
+
+
+func _rush_line(s: Dictionary, n: int) -> String:
+	var att := float(s.get("rush_att", 0))
+	return "%.0f for %.0f (%.1f a carry)" % [att / n, float(s.get("rush_yds", 0)) / n, float(s.get("rush_yds", 0)) / maxf(att, 1.0)]
+
+
+func _rate(s: Dictionary, a: String, b: String) -> String:
+	var d := float(s.get(b, 0))
+	return "-" if d == 0 else "%.0f%%" % (100.0 * float(s.get(a, 0)) / d)
+
+
+## The rules that did the work, per side: the coach's and the busiest brain rules.
+func _rules_section(box: Control, brain_tally: Array, coach_tally: Array, coaches: Array) -> void:
+	_section(box, "Rules that decided (most used)")
+	for t in 2:
+		var c: Coach = coaches[t]
+		var lines := []
+		var ct: Dictionary = coach_tally[t]
+		var cl := ct.keys()
+		cl.sort_custom(func(a, b): return ct[a] > ct[b])
+		for ln in cl.slice(0, 4):
+			lines.append("  %d× %s" % [ct[ln], _coach_rule(c, int(ln))])
+		var bt: Dictionary = brain_tally[t]
+		var flat := []
+		for bn in bt:
+			for ln in bt[bn]:
+				flat.append([int(bt[bn][ln]), bn, int(ln)])
+		flat.sort_custom(func(a, b): return a[0] > b[0])
+		for f in flat.slice(0, 8):
+			var b: Brain = Library.brain(f[1])
+			lines.append("  %d× %s: %s" % [f[0], f[1], b.rule_text(f[2]) if b != null else str(f[2])])
+		var l := _label("%s (%s)\n%s" % [Team.NAMES[t], c.name, "\n".join(lines)], fs - 2)
+		box.add_child(l)
+
+
+func _coach_rule(c: Coach, ln: int) -> String:
+	for r in c.offense_rules + c.defense_rules:
+		if int(r["line"]) == ln:
+			return String(r["text"])
+	return "line %d" % ln
+
+
+func show_batch(agg: Dictionary, names: Array) -> void:
+	var box := _open("Sim ×%d" % int(agg["n"]))
+	var n := int(agg["n"])
+	box.add_child(_label("%s won %d, %s won %d, %d tied.   Points a game %.1f - %.1f" % [names[0], agg["wins"][0], names[1], agg["wins"][1], agg["ties"], float(agg["points"][0]) / n, float(agg["points"][1]) / n], fs + 2))
+	var sc := []
+	for s in agg["scores"]:
+		sc.append("%d-%d" % [s[0], s[1]])
+	box.add_child(_label("Scores: " + ", ".join(sc), fs - 2, Color(0.8, 0.82, 0.85)))
+	_box_score(box, agg["stats"], [n, n], names)
+	_section(box, "Play calls (calls · yards a call)")
+	for t in 2:
+		box.add_child(_label(_calls_line(agg["calls"][t], Team.NAMES[t]), fs - 2))
+	_rules_section(box, agg["brain_tally"], agg["coach_tally"], [main.game.teams[0]["coach"], main.game.teams[1]["coach"]] if main.game != null else [Library.coach(main.coaches[0]), Library.coach(main.coaches[1])])
+	var row := HFlowContainer.new()
+	box.add_child(row)
+	row.add_child(_button("Sim ×10 again", func(): close_overlay(); main.run_batch(10)))
+	row.add_child(_button("Sim ×50", func(): close_overlay(); main.run_batch(50)))
+	row.add_child(_button("Teams", func(): open_teams()))

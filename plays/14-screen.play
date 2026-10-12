@@ -1,0 +1,10 @@
+play "RB Screen"
+about "Let the rush through, dump it to the back behind his linemen."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 5 read RB
+RB: route screen
+WR: route go
+TE: block
+OL: block pass

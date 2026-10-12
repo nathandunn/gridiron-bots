@@ -1,0 +1,9 @@
+ai "Road Grader"
+about "Moves people in the run game; solid enough in pass protection."
+position OL
+dials aggression 0.8 discipline 0.6
+
+rules:
+  when run play and before the throw -> drive block
+  when after the handoff -> drive block
+  otherwise -> follow assignment

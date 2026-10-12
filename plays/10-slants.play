@@ -1,0 +1,10 @@
+play "Slants"
+about "Three-step drop, slants inside, the back in the flat."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 3 read WR3 WR1 WR2 RB
+RB: route flat
+WR: route slant 3
+TE: block then route flat
+OL: block pass

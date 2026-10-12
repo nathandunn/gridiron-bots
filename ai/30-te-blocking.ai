@@ -1,0 +1,11 @@
+ai "Blocking TE"
+about "An extra lineman who sometimes leaks out."
+position TE
+dials aggression 0.7 discipline 0.8 vision 0.4 patience 0.5
+
+rules:
+  when run play and before the throw -> drive block
+  when ball thrown to me -> secure the catch
+  when with the ball -> cut upfield; lower shoulder
+  when mate has the ball -> block downfield
+  otherwise -> follow assignment

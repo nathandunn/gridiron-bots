@@ -1,0 +1,14 @@
+ai "Scrambler"
+about "If the first look isn't there he's gone - and dangerous once he is."
+position QB
+dials risk 0.5 patience 0.3 discipline 0.4 vision 0.75 aggression 0.6
+
+rules:
+  when before the throw and drop done and first read open -> throw to first read
+  when before the throw and pressure and not anyone open -> tuck and run
+  when before the throw and time over 2.5s and nobody open -> tuck and run
+  when with the ball and past the line and sideline within 3 and enemy within 3 -> get out of bounds
+  when with the ball and past the line and one man to beat -> juke
+  when with the ball and past the line and enemy within 1.5 -> go down
+  when with the ball and past the line -> run to daylight
+  otherwise -> follow assignment

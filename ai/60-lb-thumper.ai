@@ -1,0 +1,11 @@
+ai "Thumper"
+about "Downhill against the run, arrives with bad intentions."
+position LB
+dials aggression 0.85 discipline 0.5 vision 0.55
+
+rules:
+  when they run -> fill the gap; hit hard
+  when engaged and carrier within 3 -> shed the block
+  when carrier within 2 -> hit hard
+  when ball in air and ball coming my way -> play the ball
+  otherwise -> follow assignment

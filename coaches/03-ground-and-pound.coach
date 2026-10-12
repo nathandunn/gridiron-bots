@@ -1,0 +1,27 @@
+coach "Ground and Pound"
+about "Run it, run it again, play-action off it, and blitz on defense."
+
+offense:
+  when game ending and leading by over 0 and clock under 100 -> kneel
+  when fourth down and to go under 2 -> call "QB Sneak" or "Power"
+  when fourth down and in field goal range -> field goal
+  when fourth down -> punt
+  when third down and to go over 8 -> call "Smash" or "Curl Flat" or "PA Deep Shot"
+  when first down and last play gained over 5 and chance 40% -> call "PA Deep Shot"
+  otherwise -> call "Inside Zone" or "Power" or "Toss Sweep" or "Inside Zone" or "Draw"
+
+defense:
+  when they pass over 60% -> call "Cover 2" or "Cover 3"
+  when third down and to go over 6 -> call "Cover 1" or "Cover 3"
+  otherwise -> call "Run Blitz" or "Cover 1" or "Cover 0 Blitz"
+
+lineup:
+  QB "Game Manager"
+  RB "Power Back"
+  WR "Possession Receiver"
+  TE "Blocking TE"
+  OL "Road Grader"
+  DL "Bull Rusher"
+  LB "Thumper"
+  CB "Shutdown Corner"
+  S "Enforcer"

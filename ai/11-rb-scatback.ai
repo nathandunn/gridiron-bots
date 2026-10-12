@@ -1,0 +1,12 @@
+ai "Scatback"
+about "Makes the first man miss and bounces it outside looking for the home run."
+position RB
+dials vision 0.7 patience 0.25 aggression 0.4 discipline 0.3
+
+rules:
+  when with the ball and one man to beat -> juke
+  when with the ball and enemy within 1.8 -> juke
+  when with the ball and crowd ahead and behind the line -> bounce outside
+  when with the ball -> run to daylight
+  when before the throw and route done and not i am open -> settle in the gap
+  otherwise -> follow assignment

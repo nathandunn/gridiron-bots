@@ -1,0 +1,11 @@
+ai "Gunslinger"
+about "Lets it fly. Trusts the arm over the read and will fit it into any window."
+position QB
+dials risk 0.85 patience 0.35 discipline 0.3 vision 0.6 aggression 0.8
+
+rules:
+  when before the throw and drop done and deep target open -> throw deep
+  when before the throw and pressure -> throw to best
+  when before the throw and time over 3s -> throw to best
+  when with the ball and past the line -> cut upfield; lower shoulder
+  otherwise -> follow assignment

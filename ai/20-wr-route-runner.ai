@@ -1,0 +1,15 @@
+ai "Route Runner"
+about "Precise. Finds the soft spot in zone and works back to a scrambling quarterback."
+position WR
+dials vision 0.65 discipline 0.85 patience 0.6 aggression 0.4
+
+rules:
+  when before the throw and route done and not i am open -> settle in the gap
+  when before the throw and qb scrambling -> come back to the ball
+  when ball thrown to me and defender within 1.5 -> fight for the ball
+  when ball thrown to me -> secure the catch
+  when with the ball and sideline within 2 and enemy within 3 and past the sticks -> get out of bounds
+  when with the ball and enemy within 1.5 -> juke
+  when with the ball -> run to daylight
+  when mate has the ball -> block downfield
+  otherwise -> follow assignment

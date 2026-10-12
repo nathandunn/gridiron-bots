@@ -1,0 +1,11 @@
+play "Power"
+about "The left guard pulls and leads the back off right tackle."
+side offense
+kind run
+formation under center
+QB: handoff
+RB: run outside right
+OL: block run
+LG: pull right
+TE: block
+WR: block

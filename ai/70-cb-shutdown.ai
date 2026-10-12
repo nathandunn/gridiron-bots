@@ -1,0 +1,10 @@
+ai "Shutdown Corner"
+about "Mirrors his man, plays the hands at the catch, rarely gambles."
+position CB
+dials aggression 0.5 discipline 0.85 vision 0.6
+
+rules:
+  when ball thrown to my man -> play the ball
+  when ball in air and ball coming my way -> play the ball
+  when carrier within 2 -> wrap up
+  otherwise -> follow assignment

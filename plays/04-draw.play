@@ -1,0 +1,12 @@
+play "Draw"
+about "Show pass, let the rush come, then hand it up the middle."
+side offense
+kind run
+formation shotgun
+QB: handoff
+RB: run draw
+OL: block pass
+TE: block
+WR1: route go
+WR2: route go
+WR3: route seam

@@ -1,0 +1,13 @@
+ai "Pocket Passer"
+about "Works through his reads, steps up from the edge rush, throws it away rather than take a sack."
+position QB
+dials risk 0.35 patience 0.65 discipline 0.8 vision 0.7 aggression 0.3
+
+rules:
+  when before the throw and drop done and first read open -> throw to first read
+  when before the throw and rusher within 2.5 and checkdown open -> check down
+  when before the throw and pocket collapsing -> throw away
+  when before the throw and rusher within 3 and not pocket collapsing -> step up
+  when with the ball and pass play and past the line and enemy within 2 -> go down
+  when with the ball and past the line -> run to daylight
+  otherwise -> follow assignment

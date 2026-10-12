@@ -1,0 +1,13 @@
+play "Run Blitz"
+about "Stack the box: linebackers shoot gaps, the strong safety fills, man behind it."
+side defense
+kind blitz
+front goal line
+DL: rush
+OLB1: blitz
+MLB: blitz
+OLB2: zone hook right
+SS: zone robber
+CB1: man WR1
+CB2: man WR2
+FS: zone deep middle

@@ -1,0 +1,12 @@
+ai "Patient Runner"
+about "Lets the blocks develop, reads the second level, takes the cutback."
+position RB
+dials vision 0.9 patience 0.8 aggression 0.5 discipline 0.7
+
+rules:
+  when with the ball and blocker ahead and time under 2s -> follow my blocker
+  when with the ball and enemy within 1.5 -> stiff arm; protect the ball
+  when with the ball and goal line within 6 -> race for the pylon
+  when with the ball -> run to daylight
+  when before the throw and assignment is block -> pick up the blitz
+  otherwise -> follow assignment

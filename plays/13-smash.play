@@ -1,0 +1,12 @@
+play "Smash"
+about "Hitch underneath, corner over the top: a high-low on the cornerback."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 5 read WR3 WR1 TE WR2 RB
+RB: route flat
+WR1: route hitch 5
+WR3: route corner 11
+WR2: route hitch 6
+TE: route out 6
+OL: block pass

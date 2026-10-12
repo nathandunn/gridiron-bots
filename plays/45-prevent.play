@@ -1,0 +1,16 @@
+play "Prevent"
+about "Three rush, everyone else deep: give the short stuff, never the long ball."
+side defense
+kind zone
+front off
+DE1: rush contain
+DT1: rush
+DT2: zone hook middle
+DE2: rush contain
+OLB1: zone curl left
+MLB: zone hook left
+OLB2: zone curl right
+CB1: zone deep third left
+CB2: zone deep third right
+FS: zone deep middle
+SS: zone deep half right

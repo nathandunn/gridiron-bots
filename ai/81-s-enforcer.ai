@@ -1,0 +1,10 @@
+ai "Enforcer"
+about "A box safety: flies up against the run and punishes catches."
+position S
+dials aggression 0.85 discipline 0.45 vision 0.55
+
+rules:
+  when they run -> fill the gap; hit hard
+  when ball in air and ball coming my way -> play the ball
+  when carrier within 2 -> hit hard
+  otherwise -> follow assignment

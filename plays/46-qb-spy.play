@@ -1,0 +1,13 @@
+play "Cover 1 Spy"
+about "Man coverage with the middle linebacker shadowing a running quarterback."
+side defense
+kind man
+front off
+DL: rush
+CB1: man WR1
+CB2: man WR2
+OLB1: man TE
+SS: man WR3
+OLB2: man RB
+MLB: spy
+FS: zone deep middle

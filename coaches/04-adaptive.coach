@@ -1,0 +1,36 @@
+coach "Adaptive"
+about "Keeps calling whatever is working, drops what isn't, and defends what the other side keeps doing."
+
+offense:
+  when game ending and leading by over 0 and clock under 100 -> kneel
+  when fourth down and to go under 2 and past midfield -> call "QB Sneak" or "Power"
+  when fourth down and in field goal range -> field goal
+  when fourth down -> punt
+  when "Mesh" averaging over 7 and chance 50% -> call "Mesh"
+  when "Smash" averaging over 7 and chance 50% -> call "Smash"
+  when "Four Verticals" averaging over 9 and chance 50% -> call "Four Verticals"
+  when "Power" averaging over 5 and chance 50% -> call "Power"
+  when "Inside Zone" averaging over 5 and chance 50% -> call "Inside Zone"
+  when third down and to go over 6 -> call "Smash" or "Mesh" or "Four Verticals"
+  when running averaging under 3 -> call "Slants" or "Mesh" or "Curl Flat" or "Smash"
+  when passing averaging under 4 -> call "Inside Zone" or "Power" or "Draw"
+  otherwise -> call "Inside Zone" or "Power" or "Slants" or "Mesh" or "Smash" or "Curl Flat"
+
+defense:
+  when they run over 60% -> call "Run Blitz" or "Cover 1"
+  when they pass over 60% and third down -> call "Cover 2" or "Cover 3"
+  when they pass over 60% -> call "Cover 1" or "Cover 0 Blitz" or "Cover 3"
+  when "Cover 3" averaging under 3 and chance 50% -> call "Cover 3"
+  when "Cover 1" averaging under 3 and chance 50% -> call "Cover 1"
+  otherwise -> call "Cover 3" or "Cover 2" or "Cover 1"
+
+lineup:
+  QB "Pocket Passer"
+  RB "Patient Runner"
+  WR "Route Runner"
+  TE "Receiving TE"
+  OL "Pass Protector"
+  DL "Bull Rusher"
+  LB "Coverage LB"
+  CB "Shutdown Corner"
+  S "Center Fielder"

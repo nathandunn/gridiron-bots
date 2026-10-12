@@ -1,0 +1,33 @@
+coach "Balanced"
+about "By the book: run to set up the pass, kick on fourth unless it's short and close."
+
+offense:
+  when game ending and leading by over 0 and to go over 0 and clock under 100 -> kneel
+  when fourth down and to go under 2 and past midfield -> call "QB Sneak" or "Inside Zone"
+  when fourth down and in field goal range -> field goal
+  when fourth down -> punt
+  when goal line within 3 -> call "QB Sneak" or "Power" or "Slants"
+  when third down and to go over 7 -> call "Four Verticals" or "Smash" or "Mesh"
+  when third down and to go under 3 -> call "Inside Zone" or "Power" or "Slants"
+  when third down -> call "Slants" or "Curl Flat" or "Mesh"
+  when first down and chance 25% -> call "PA Deep Shot"
+  when half ending and trailing -> call "Four Verticals" or "Smash" or "Curl Flat"
+  otherwise -> call "Inside Zone" or "Power" or "Slants" or "Curl Flat" or "Toss Sweep" or "Mesh"
+
+defense:
+  when goal line within 4 -> call "Run Blitz" or "Cover 0 Blitz"
+  when third down and to go over 7 -> call "Cover 3" or "Cover 2" or "Cover 1"
+  when third down -> call "Cover 1" or "Cover 0 Blitz"
+  when game ending and leading -> call "Prevent"
+  otherwise -> call "Cover 3" or "Cover 2" or "Cover 1"
+
+lineup:
+  QB "Pocket Passer"
+  RB "Patient Runner"
+  WR "Route Runner"
+  TE "Receiving TE"
+  OL "Pass Protector"
+  DL "Bull Rusher"
+  LB "Coverage LB"
+  CB "Shutdown Corner"
+  S "Center Fielder"

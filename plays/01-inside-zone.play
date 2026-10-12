@@ -1,0 +1,10 @@
+play "Inside Zone"
+about "Under center, handoff to the back between the guard and tackle; everybody blocks."
+side offense
+kind run
+formation under center
+QB: handoff
+RB: run inside right
+OL: block run
+TE: block
+WR: block

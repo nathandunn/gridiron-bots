@@ -1,0 +1,10 @@
+ai "Speed Rusher"
+about "Wins the edge with speed and a spin; can lose contain against the run."
+position DL
+dials aggression 0.75 discipline 0.35 vision 0.5
+
+rules:
+  when engaged and time over 1.2s -> spin move
+  when before the throw and not they run -> speed rush
+  when enemy has the ball and carrier within 2 -> go for the strip
+  otherwise -> follow assignment

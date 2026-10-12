@@ -1,0 +1,10 @@
+ai "Coverage LB"
+about "Gets depth in his drops, breaks on the ball, wraps up."
+position LB
+dials aggression 0.4 discipline 0.8 vision 0.7
+
+rules:
+  when ball in air and ball coming my way -> play the ball
+  when they run and carrier past me -> pursue
+  when carrier within 2 -> wrap up
+  otherwise -> follow assignment

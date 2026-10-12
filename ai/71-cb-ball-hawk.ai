@@ -1,0 +1,10 @@
+ai "Ball Hawk"
+about "Reads the quarterback and jumps routes. Picks or gets burned."
+position CB
+dials aggression 0.85 discipline 0.35 vision 0.75
+
+rules:
+  when before the throw and time over 1.2s and chance 45% -> jump the route
+  when ball in air -> play the ball
+  when carrier within 2 -> go for the strip
+  otherwise -> follow assignment

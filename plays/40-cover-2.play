@@ -1,0 +1,15 @@
+play "Cover 2"
+about "Two safeties split the deep field, corners sit in the flats, linebackers in the hooks."
+side defense
+kind zone
+front even
+DL: rush
+DE1: rush contain
+DE2: rush contain
+OLB1: zone hook left
+MLB: zone hook middle
+OLB2: zone hook right
+CB1: zone flat left
+CB2: zone flat right
+FS: zone deep half left
+SS: zone deep half right

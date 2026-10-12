@@ -1,0 +1,11 @@
+ai "Game Manager"
+about "Takes what the defense gives: the check-down, the throw-away, never the pick."
+position QB
+dials risk 0.15 patience 0.45 discipline 0.95 vision 0.55 aggression 0.2
+
+rules:
+  when before the throw and drop done and first read open -> throw to first read
+  when before the throw and time over 1.8s and checkdown open -> check down
+  when before the throw and pressure -> throw away
+  when with the ball and pass play and past the line and enemy within 2.5 -> go down
+  otherwise -> follow assignment

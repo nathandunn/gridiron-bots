@@ -1,0 +1,11 @@
+ai "Center Fielder"
+about "Nothing gets behind him. Takes the deep angle, tackles last."
+position S
+dials aggression 0.35 discipline 0.9 vision 0.75
+
+rules:
+  when before the throw and assignment is zone and deep threat -> stay deep
+  when ball in air -> play the ball
+  when enemy has the ball and not carrier within 9 -> stay deep
+  when carrier within 2 -> wrap up
+  otherwise -> follow assignment

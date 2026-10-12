@@ -1,0 +1,13 @@
+play "Cover 0 Blitz"
+about "Six come, everyone else in man, nobody deep. Get home or give up the house."
+side defense
+kind blitz
+front press
+DL: rush
+MLB: blitz
+OLB2: blitz
+CB1: man WR1
+CB2: man WR2
+OLB1: man TE
+SS: man WR3
+FS: man RB

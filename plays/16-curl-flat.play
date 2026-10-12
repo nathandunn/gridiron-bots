@@ -1,0 +1,12 @@
+play "Curl Flat"
+about "Curls on the outside, a flat underneath: easy throws against zone."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 5 read WR1 WR3 WR2 TE RB
+RB: block
+WR1: route curl 10
+WR2: route curl 10
+WR3: route flat
+TE: route out 5
+OL: block pass

@@ -1,0 +1,13 @@
+ai "Possession Receiver"
+about "Sure hands over the middle; moves the chains and gets down or out."
+position WR
+dials vision 0.55 discipline 0.9 patience 0.7 aggression 0.3 risk 0.2
+
+rules:
+  when before the throw and route done -> settle in the gap
+  when ball thrown to me -> secure the catch
+  when with the ball and past the sticks and sideline within 3 -> get out of bounds
+  when with the ball and enemy within 1.2 -> protect the ball; lower shoulder
+  when with the ball -> run to daylight
+  when mate has the ball -> block downfield
+  otherwise -> follow assignment

@@ -1,0 +1,25 @@
+coach "Option Run"
+about "A scrambling quarterback, sweeps and draws; the defense spies the quarterback."
+
+offense:
+  when game ending and leading by over 0 and clock under 100 -> kneel
+  when fourth down and to go under 3 and past midfield -> call "QB Sneak" or "Toss Sweep"
+  when fourth down and in field goal range -> field goal
+  when fourth down -> punt
+  when third down and to go over 7 -> call "Mesh" or "Smash"
+  otherwise -> call "Toss Sweep" or "Draw" or "Power" or "Slants" or "Mesh" or "PA Deep Shot"
+
+defense:
+  when third down -> call "Cover 1 Spy" or "Cover 3"
+  otherwise -> call "Cover 3" or "Cover 1 Spy" or "Cover 2"
+
+lineup:
+  QB "Scrambler"
+  RB "Scatback"
+  WR "Route Runner"
+  TE "Receiving TE"
+  OL "Road Grader"
+  DL "Speed Rusher"
+  LB "Thumper"
+  CB "Shutdown Corner"
+  S "Enforcer"

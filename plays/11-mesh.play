@@ -1,0 +1,12 @@
+play "Mesh"
+about "Two shallow crossers rub past each other; a corner and a dig behind them."
+side offense
+kind pass
+formation shotgun
+QB: pass drop 5 read WR3 TE WR1 RB WR2
+RB: route swing
+WR1: route dig 11
+WR2: route corner 10
+WR3: route drag 3
+TE: route drag 5
+OL: block pass

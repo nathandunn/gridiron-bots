@@ -1,0 +1,13 @@
+ai "Receiving TE"
+about "A big slot receiver who sits down in zone and boxes out in man."
+position TE
+dials aggression 0.5 discipline 0.6 vision 0.6 patience 0.6
+
+rules:
+  when before the throw and route done and not i am open -> settle in the gap
+  when ball thrown to me and defender within 1.5 -> fight for the ball
+  when ball thrown to me -> secure the catch
+  when with the ball and enemy within 1.5 -> lower shoulder
+  when with the ball -> run to daylight
+  when mate has the ball -> block downfield
+  otherwise -> follow assignment
