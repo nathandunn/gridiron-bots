@@ -39,8 +39,8 @@ var quarter_ends: Array = []   # a snapshot at the end of each quarter: {q, scor
 
 ## How each side picks its plays: "coach" (the coach's rules), "random" (any play in the book),
 ## "generated" (a new play made up every down). Kicks on fourth down stay the coach's call.
-const CALLING := ["coach", "random", "generated"]
-const CALLING_LABEL := {"coach": "Coach calls", "random": "Random from playbook", "generated": "Random new plays"}
+const CALLING := ["pick", "coach", "random", "generated"]
+const CALLING_LABEL := {"pick": "You pick (from new plays)", "coach": "Coach calls", "random": "Random from playbook", "generated": "Random new plays"}
 
 
 func setup(red: Dictionary, blue: Dictionary, quarter_secs: float, seed_v: int) -> void:
@@ -89,13 +89,30 @@ func _new_drive() -> void:
 
 ## The coach's decision for the coming snap: {kind: "play", off: Play, def: Play} or a kick
 ## that has already been resolved ({kind: "punt"/"fg"/"kneel", text}).
-func next_snap() -> Dictionary:
+## What the side on offense / defense picks with, right now.
+func calling_for(on_offense: bool) -> String:
+	return String((offense() if on_offense else defense()).get("calling", "coach"))
+
+
+## Can the offense kick a field goal from here?
+func fg_range() -> bool:
+	return 100.0 - yl + 17.0 <= 55.0
+
+
+## `choice` carries a person's picks: {off: {text, play}} / {def: {text, play}} / {kick: "punt" | "field_goal"}.
+## A side set to "pick" with no choice given plays a made-up play (as in a batch).
+func next_snap(choice: Dictionary = {}) -> Dictionary:
 	if over:
 		return {"kind": "over"}
 	var oc: Coach = offense()["coach"]
 	var dc: Coach = defense()["coach"]
 	var od := _coach_call(oc, true, poss)
 	var dd := _coach_call(dc, false, 1 - poss)
+	if calling_for(true) == "pick" and (choice.has("off") or choice.has("kick")):
+		# the person decides kicks too
+		od = {"kind": String(choice.get("kick", "play")) if choice.has("kick") else "play", "play": od.get("play", "")}
+		if od["kind"] == "play" and od["play"] == "":
+			od["play"] = Library.plays_for("offense")[0]
 	match String(od["kind"]):
 		"punt":
 			return _punt()
@@ -108,7 +125,19 @@ func next_snap() -> Dictionary:
 	if dp == null:
 		dp = Library.play(Library.plays_for("defense")[0])
 	pending = {"kind": "play", "off_text": "", "def_text": ""}
-	match String(offense().get("calling", "coach")):
+	var off_mode := calling_for(true)
+	var def_mode := calling_for(false)
+	if off_mode == "pick":
+		off_mode = ""      # nobody to ask (a batch) or "let the coach call it": the coach's play
+		if choice.has("off"):
+			op = choice["off"]["play"]
+			pending["off_text"] = choice["off"]["text"]
+	if def_mode == "pick":
+		def_mode = ""
+		if choice.has("def"):
+			dp = choice["def"]["play"]
+			pending["def_text"] = choice["def"]["text"]
+	match off_mode:
 		"random":
 			var o: Array = Library.plays_for("offense")
 			op = Library.play(o[rng.randi() % o.size()])
@@ -116,7 +145,7 @@ func next_snap() -> Dictionary:
 			var g := PlayGen.offense(rng)
 			op = g["play"]
 			pending["off_text"] = g["text"]
-	match String(defense().get("calling", "coach")):
+	match def_mode:
 		"random":
 			var d: Array = Library.plays_for("defense")
 			dp = Library.play(d[rng.randi() % d.size()])

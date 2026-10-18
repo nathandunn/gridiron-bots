@@ -182,3 +182,42 @@ static func _finish(name: String, side: String, about: String, lines: Array[Stri
 	if not p.errors.is_empty():
 		push_warning("generated play didn't read: %s\n%s" % ["; ".join(p.errors), text])
 	return {"text": text, "play": p}
+
+
+## A hand of n different plays to choose from. Offense: runs and passes both in the mix, more
+## runs on short yardage and more passes on long; defense: zone, man and blitz all represented.
+static func hand(rng: RandomNumberGenerator, side: String, n: int, to_go := 10.0) -> Array:
+	var out: Array = []
+	var seen := {}
+	var want_runs := 3
+	if to_go <= 2.0:
+		want_runs = 4
+	elif to_go >= 8.0:
+		want_runs = 2
+	var runs := 0
+	var guard := 0
+	while out.size() < n and guard < 200:
+		guard += 1
+		var g: Dictionary = offense(rng) if side == "offense" else defense(rng)
+		var p: Play = g["play"]
+		if not p.errors.is_empty() or seen.has(p.name):
+			continue
+		if side == "offense":
+			var is_run := p.kind == "run"
+			var left := n - out.size()
+			# keep the mix: stop taking runs once there are enough, and save room for them
+			if is_run and runs >= want_runs:
+				continue
+			if not is_run and left <= want_runs - runs:
+				continue
+			if is_run:
+				runs += 1
+		seen[p.name] = true
+		out.append(g)
+	if side == "defense":
+		# zone first, then man, then the all-out blitzes
+		var order := {"zone": 0, "man": 1, "blitz": 2}
+		out.sort_custom(func(a, b): return order.get(a["play"].kind, 1) < order.get(b["play"].kind, 1))
+	else:
+		out.sort_custom(func(a, b): return int(a["play"].kind == "run") > int(b["play"].kind == "run"))
+	return out

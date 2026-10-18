@@ -13,7 +13,9 @@ var red_coach := "Balanced"
 var blue_coach := "Air Raid"
 var coaches := ["Balanced", "Air Raid"]
 var picks := [{}, {}]
-var calling := ["coach", "coach"]   # how each side picks plays: coach / random / generated
+var calling := ["pick", "coach"]   # Red: you pick from a hand of new plays; Blue: its coach
+var _choice := {}                  # the person's picks for the coming snap
+const HAND := 8   # how each side picks plays: coach / random / generated
 var qlen := 300.0
 var speed := 1.0
 var paused := false
@@ -297,6 +299,7 @@ func new_game() -> void:
 	sim = null
 	_skip_drive = false
 	_seen_q = 0
+	_choice = {}
 	hud.show_call("")
 	hud.show_result("Kick-off: %s receive" % Team.NAMES[game.poss])
 	_next()
@@ -315,6 +318,34 @@ func library_changed() -> void:
 
 func overlay_changed(open: bool) -> void:
 	cam.input_blocked = open
+
+
+func _open_picker(side: String) -> void:
+	_skip_drive = false
+	_phase = "picking"
+	var hand := PlayGen.hand(game.rng, side, HAND, game.to_go)
+	var team: int = game.poss if side == "offense" else 1 - game.poss
+	hud.open_picker(game, team, side, hand)
+	if OS.get_cmdline_user_args().has("--autopick"):
+		# test hook: pick for the person (punt on 4th, else a random card)
+		var kind := "off" if side == "offense" else "def"
+		if side == "offense" and game.down == 4:
+			(func(): pick_made("kick", "field_goal" if game.fg_range() else "punt")).call_deferred()
+		else:
+			(func(): pick_made(kind, hand[randi() % hand.size()])).call_deferred()
+
+
+## From the picker: kind is "off" / "def" (value: a generated {text, play}), "kick" ("punt" /
+## "field_goal"), or "coach_off" / "coach_def" (let the coach call this one).
+func pick_made(kind: String, value: Variant) -> void:
+	_choice[kind] = value
+	hud.close_overlay()
+	_next()
+
+
+func redeal(side: String) -> void:
+	hud.close_overlay()
+	_open_picker(side)
 
 
 func resume_after_break() -> void:
@@ -359,8 +390,16 @@ func _next() -> void:
 		hud.show_result("Final")
 		hud.show_game_over(game)
 		return
+	# a side the person calls: deal a hand of new plays and wait for the pick
+	if game.calling_for(true) == "pick" and not (_choice.has("off") or _choice.has("kick") or _choice.has("coach_off")):
+		_open_picker("offense")
+		return
+	if game.calling_for(false) == "pick" and not (_choice.has("def") or _choice.has("coach_def") or _choice.has("kick")):
+		_open_picker("defense")
+		return
 	var poss_before := game.poss
-	var snap := game.next_snap()
+	var snap := game.next_snap(_choice)
+	_choice = {}
 	if snap["kind"] != "play":
 		hud.show_call("")
 		hud.show_result(String(snap.get("text", "")))
@@ -386,6 +425,12 @@ func _process(delta: float) -> void:
 		return
 	if _batch_left > 0:
 		_batch_step()
+		return
+	if _phase == "picking" and not hud.any_overlay():
+		# the picker was closed: the coach calls this one
+		var side := "coach_off" if game.calling_for(true) == "pick" and not (_choice.has("off") or _choice.has("kick") or _choice.has("coach_off")) else "coach_def"
+		_choice[side] = true
+		_next()
 		return
 	if _phase == "qbreak" and not hud.any_overlay():
 		_next()   # the break panel was closed without Continue

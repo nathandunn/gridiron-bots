@@ -345,7 +345,8 @@ func open_teams() -> void:
 		var b := _button(Game.CALLING_LABEL[mode], func(): main.calling[t] = mode; main.library_changed(); open_teams(), true)
 		b.button_pressed = main.calling[t] == mode
 		cf.add_child(b)
-	var why := {"coach": "The coach's rules pick every play.",
+	var why := {"pick": "You call every play for this side: each down you get a hand of 8 brand-new plays (with diagrams) to choose from, or let the coach call it. On 4th down you can punt or kick.",
+		"coach": "The coach's rules pick every play.",
 		"random": "Any play in the playbook, picked at random every down. The coach still decides punts and field goals.",
 		"generated": "A brand-new play made up every down: random formation, routes, gaps, coverages and blitzes. Save the good ones from the Log."}
 	box.add_child(_label(why[main.calling[t]], fs - 1, Color(0.8, 0.82, 0.85)))
@@ -644,6 +645,82 @@ func _save_generated(text: String) -> void:
 		main.library_changed()
 	else:
 		toast("Couldn't save: %s" % r[0][0], 3.0)
+
+
+## ---- calling your own plays ---------------------------------------------------------------
+
+func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
+	var title := "%s %s · %s" % [Team.NAMES[team], side, g.situation()]
+	var box := _open(title)
+	box.add_child(_label("%s %d - %d %s   ·   Q%d %d:%02d.  Pick a play - all made up just now." % [
+		(g.teams[0]["coach"] as Coach).name, g.score[0], g.score[1], (g.teams[1]["coach"] as Coach).name,
+		mini(g.quarter, 4), maxi(int(g.clock), 0) / 60, maxi(int(g.clock), 0) % 60], fs - 2, Color(0.8, 0.82, 0.85)))
+	var vp := get_viewport().get_visible_rect().size
+	var inner := minf(vp.x - 16.0, 900.0) - 40.0
+	var cols := 2 if inner < 560.0 else 4
+	var cw := floorf((inner - 8.0 * (cols - 1)) / cols)
+	var grid := GridContainer.new()
+	grid.columns = cols
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	box.add_child(grid)
+	for g2 in hand:
+		var p: Play = g2["play"]
+		var card := Button.new()
+		card.focus_mode = Control.FOCUS_NONE
+		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		card.custom_minimum_size = Vector2(cw, cw * 0.62 + fs * 2.6 + 10.0)
+		var v := VBoxContainer.new()
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 4
+		v.offset_right = -4
+		v.offset_top = 4
+		v.offset_bottom = -4
+		v.add_theme_constant_override("separation", 2)
+		card.add_child(v)
+		var d := PlayDiagram.new()
+		d.custom_minimum_size = Vector2(cw - 8.0, cw * 0.62)
+		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(d)
+		d.setup(p)
+		var nl := _label(p.name.replace("Gen ", ""), fs - 2, Color(1, 0.92, 0.6))
+		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		nl.clip_text = true
+		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		v.add_child(nl)
+		var sl := _label(_play_subline(p), fs - 3, Color(0.78, 0.82, 0.86))
+		sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		sl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		sl.clip_text = true
+		v.add_child(sl)
+		card.pressed.connect(func(): main.pick_made("off" if side == "offense" else "def", g2))
+		grid.add_child(card)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
+	box.add_child(row)
+	row.add_child(_button("🎲 Deal new plays", func(): main.redeal(side)))
+	row.add_child(_button("Let the coach call it", func(): main.pick_made("coach_off" if side == "offense" else "coach_def", true)))
+	if side == "offense" and g.down == 4:
+		row.add_child(_button("Punt", func(): main.pick_made("kick", "punt")))
+		if g.fg_range():
+			row.add_child(_button("Field goal (%d yd)" % int(round(100.0 - g.yl + 17.0)), func(): main.pick_made("kick", "field_goal")))
+	box.add_child(_label("Yellow is the run, blue the line of scrimmage. Defense: shaded zones, dashed lines for man, red arrows for blitzers.", fs - 3, Color(0.7, 0.74, 0.78)))
+
+
+func _play_subline(p: Play) -> String:
+	if p.side == "offense":
+		var qb: Dictionary = p.assigns.get("QB", {})
+		if p.kind == "run":
+			return "%s · run" % p.formation.capitalize()
+		return "%s · %s%d-step drop" % [p.formation.capitalize(), "play action, " if qb.get("fake", false) else "", int(qb.get("drop", 5))]
+	var blitz := 0
+	for s in p.assigns:
+		if String(p.assigns[s].get("kind", "")) == "blitz":
+			blitz += 1
+	return "%s · %s%s" % [p.front.capitalize(), p.kind, (" · %d blitz" % blitz) if blitz > 0 else ""]
 
 
 ## ---- box scores: at each quarter break, at the end and any time from Stats ---------------

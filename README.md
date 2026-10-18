@@ -55,7 +55,11 @@ lineup:
   *did you mean …* suggestions, a word list per file kind (tap to insert, with an example),
   completion after a space, Save / Reset to shipped / Copy as new. Edits are kept in the browser
   and used from the next snap.
-- **Play calling** (Teams panel, per side, offense and defense): *Coach calls*, *Random from
+- **Call your own plays** (Red's default): each down you're dealt a hand of 8 brand-new plays —
+  offense or defense — each card with a chalkboard diagram drawn from the engine's own alignment
+  (routes, run path, blocks; zones, man lines, blitz arrows). Tap one, deal a new hand, or let the
+  coach call it; on 4th down you can punt or kick. Set both sides to *You pick* for two players.
+- **Play calling** (Teams panel, per side, offense and defense): *You pick*, *Coach calls*, *Random from
   playbook* (any play, every down), or *Random new plays* — a fresh play made up every down
   (`scripts/play_gen.gd`: formation, routes and depths, run gaps and pulls, shells, man matchups
   and blitzes), written as ordinary play text. The coach still decides punts and field goals.
