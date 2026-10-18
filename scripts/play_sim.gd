@@ -1016,6 +1016,7 @@ func _throw(qb: P, r: P) -> bool:
 	thrown = true
 	air = {"from": qb.pos, "to": to, "t0": t, "T": T, "lob": dist > 28.0, "dist": dist}
 	air_target = r
+	stat["target"] = r.slot
 	_bump("att", qb)
 	_say("%s throws to %s" % [qb.slot, r.slot])
 	carrier = null
@@ -2090,6 +2091,8 @@ func _ball() -> void:
 			if carrier != null:
 				ball_pos = carrier.pos
 				ball_h = 1.0
+				if carrier.side == 0 and not thrown and not stat.has("fumbler"):
+					stat["rusher"] = carrier.slot
 				if carrier.side == 0 and carrier.pos.y > 0.0 and not crossed_los:
 					crossed_los = true
 		"air":
@@ -2145,6 +2148,7 @@ func _arrive() -> void:
 		var p_pbu := 0.45 * q * (0.5 + float(best_d.body["agility"]) * 0.6)
 		if best_o == null or rng.randf() < p_pbu * (0.7 if best_o.manner.get("high_point", false) else 1.0):
 			_say("broken up by %s" % best_d.slot)
+			stat["pbu_by"] = best_d.slot
 			_incomplete("broken up")
 			return
 	if best_o == null:
@@ -2202,6 +2206,7 @@ func _incomplete(why: String) -> void:
 func _recover(p: P) -> void:
 	if p.side == 1:
 		stat["turnover"] = "fumble"
+		stat["fr_by"] = p.slot
 		_say("FUMBLE recovered by the defense (%s)" % p.slot)
 	else:
 		_say("fumble, recovered by %s" % p.slot)
@@ -2297,6 +2302,8 @@ func _contacts() -> void:
 
 func _fumble(c: P, by: P) -> void:
 	_say("FUMBLE! %s strips it" % by.slot)
+	stat["ff_by"] = by.slot
+	stat["fumbler"] = c.slot
 	_bump("fumble", c)
 	ball_state = "loose"
 	ball_pos = c.pos + Vector2(rng.randf_range(-2.5, 2.5), rng.randf_range(-2.0, 2.0))

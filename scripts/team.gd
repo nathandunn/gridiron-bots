@@ -8,14 +8,14 @@ const NAMES := ["Red", "Blue"]
 const COLORS := [Color(0.82, 0.16, 0.14), Color(0.16, 0.36, 0.86)]
 
 
-static func build(index: int, coach_name: String, picks: Dictionary = {}) -> Dictionary:
+static func build(index: int, coach_name: String, picks: Dictionary = {}, calling := "coach") -> Dictionary:
 	var c: Coach = Library.coach(coach_name)
 	if c == null:
 		c = Library.coach(Library.names("coach")[0])
 	var brains := {}
 	for s in Play.OFFENSE_SLOTS + Play.DEFENSE_SLOTS:
 		brains[s] = brain_for(c, s, picks)
-	return {"index": index, "name": NAMES[index], "coach": c, "brains": brains, "picks": picks.duplicate()}
+	return {"index": index, "name": NAMES[index], "coach": c, "brains": brains, "picks": picks.duplicate(), "calling": calling}
 
 
 static func brain_for(c: Coach, slot: String, picks: Dictionary) -> Brain:

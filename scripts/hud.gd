@@ -230,6 +230,7 @@ func _build_controls() -> void:
 	bar.add_child(_button("Teams", func(): open_teams()))
 	bar.add_child(_button("Edit AI", func(): open_editor()))
 	bar.add_child(_button("Sim ×10", func(): main.run_batch(10)))
+	bar.add_child(_button("Stats", func(): if main.game != null: show_stats(main.game, "live")))
 	bar.add_child(_button("Log", func(): open_log()))
 	bar.add_child(_button("New game", func(): main.new_game()))
 	mark_speed(1.0)
@@ -335,6 +336,19 @@ func open_teams() -> void:
 	var c: Coach = Library.coach(cur)
 	if c != null:
 		box.add_child(_label(c.about, fs - 1, Color(0.8, 0.82, 0.85)))
+	_section(box, "Play calling (offense and defense)")
+	var cf := HFlowContainer.new()
+	cf.add_theme_constant_override("h_separation", 6)
+	cf.add_theme_constant_override("v_separation", 6)
+	box.add_child(cf)
+	for mode in Game.CALLING:
+		var b := _button(Game.CALLING_LABEL[mode], func(): main.calling[t] = mode; main.library_changed(); open_teams(), true)
+		b.button_pressed = main.calling[t] == mode
+		cf.add_child(b)
+	var why := {"coach": "The coach's rules pick every play.",
+		"random": "Any play in the playbook, picked at random every down. The coach still decides punts and field goals.",
+		"generated": "A brand-new play made up every down: random formation, routes, gaps, coverages and blitzes. Save the good ones from the Log."}
+	box.add_child(_label(why[main.calling[t]], fs - 1, Color(0.8, 0.82, 0.85)))
 	_section(box, "Brains by position")
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -603,14 +617,170 @@ func open_log() -> void:
 			who = Team.NAMES[int(e["team"])] + " · " + ["", "1st", "2nd", "3rd", "4th"][clampi(int(e["down"]), 1, 4)] + " & " + str(maxi(int(round(float(e["to_go"]))), 1)) + " · "
 		var l := _label("Q%d %d:%02d  %d-%d   %s%s" % [e["q"], s / 60, s % 60, e["score"][0], e["score"][1], who, e["text"]], fs - 2)
 		box.add_child(l)
+		if e.has("off_text") or e.has("def_text"):
+			var row := HFlowContainer.new()
+			row.add_theme_constant_override("h_separation", 6)
+			box.add_child(row)
+			for k in ["off_text", "def_text"]:
+				if e.has(k):
+					var txt: String = e[k]
+					var b := _button("＋ Save %s play" % ("offense" if k == "off_text" else "defense"), func(): _save_generated(txt))
+					b.add_theme_font_size_override("font_size", fs - 3)
+					row.add_child(b)
+
+
+## Keep a play made up during the game: it goes into the playbook under its own name.
+func _save_generated(text: String) -> void:
+	var p := Play.parse(text)
+	var base := p.name.replace("Gen ", "My ")
+	var n := base
+	var k := 2
+	while Library.play(n) != null:
+		n = "%s #%d" % [base, k]
+		k += 1
+	var r := Library.save("play", text.replace("\"%s\"" % p.name, "\"%s\"" % n).replace("Made up for this down.", "Saved from a game."))
+	if (r[0] as Array).is_empty():
+		toast("Saved \"%s\" to the playbook" % n, 2.5)
+		main.library_changed()
+	else:
+		toast("Couldn't save: %s" % r[0][0], 3.0)
+
+
+## ---- box scores: at each quarter break, at the end and any time from Stats ---------------
+
+var _stats_tab := "team"
+
+
+## mode: "quarter" (a break - Continue goes on), "final", or "live" (just a look).
+func show_stats(g: Game, mode: String, snap: Dictionary = {}) -> void:
+	var names := [(g.teams[0]["coach"] as Coach).name, (g.teams[1]["coach"] as Coach).name]
+	var score: Array = snap.get("score", g.score)
+	var line: Array = snap.get("line", g.line)
+	var stats: Array = snap.get("stats", g.stats)
+	var pstats: Array = snap.get("pstats", g.pstats)
+	var title := "Box score"
+	match mode:
+		"quarter":
+			var q := int(snap.get("q", 1))
+			title = ["", "End of the 1st quarter", "Halftime", "End of the 3rd quarter", "End of regulation"][clampi(q, 1, 4)]
+		"final":
+			title = "Final"
+		"live":
+			title = "Box score · Q%d" % mini(g.quarter, 4)
+	var box := _open(title)
+	if mode == "final":
+		var w := g.winner()
+		box.add_child(_label("Tie game" if w < 0 else "%s win" % names[w], fs + 3, Color(1, 0.9, 0.55)))
+	_line_score(box, names, line, score)
+	var tabs := HFlowContainer.new()
+	tabs.add_theme_constant_override("h_separation", 6)
+	box.add_child(tabs)
+	for tab in [["team", "Team"], ["p0", "%s players" % Team.NAMES[0]], ["p1", "%s players" % Team.NAMES[1]]]:
+		var b := _button(tab[1], func(): _stats_tab = tab[0]; show_stats(g, mode, snap), true)
+		b.button_pressed = _stats_tab == tab[0]
+		tabs.add_child(b)
+	match _stats_tab:
+		"team":
+			_box_score(box, stats, [1, 1], names)
+		"p0", "p1":
+			var t := int(_stats_tab.substr(1))
+			_player_tables(box, pstats[t], 1, g.teams[t])
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 6)
+	box.add_child(row)
+	if mode == "quarter":
+		var go := _button("▶ Continue", func(): close_overlay(); main.resume_after_break())
+		go.add_theme_font_size_override("font_size", fs + 2)
+		row.add_child(go)
+		var stop := _button("Stop at quarter breaks", func(): main.stop_at_quarters = not main.stop_at_quarters, true)
+		stop.button_pressed = main.stop_at_quarters
+		row.add_child(stop)
+	if mode == "final":
+		row.add_child(_button("▶ Play again", func(): close_overlay(); main.new_game()))
+		row.add_child(_button("Sim ×10 these teams", func(): close_overlay(); main.run_batch(10)))
+		_final_extras(box, g)
+
+
+func _line_score(box: Control, names: Array, line: Array, score: Array) -> void:
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 14)
+	box.add_child(grid)
+	for h in ["", "1", "2", "3", "4", "T"]:
+		var l := _label(h, fs - 1, Color(1, 0.85, 0.45))
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		grid.add_child(l)
+	for t in 2:
+		var nl := _label(names[t], fs, FieldView.COLORS[t].lightened(0.4))
+		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		grid.add_child(nl)
+		for q in 4:
+			var l := _label(str(line[t][q]), fs)
+			l.autowrap_mode = TextServer.AUTOWRAP_OFF
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			grid.add_child(l)
+		var tl := _label(str(score[t]), fs + 1, Color.WHITE)
+		tl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		grid.add_child(tl)
+
+
+## Passing, rushing, receiving and defense for one side. `per` divides (games in a batch).
+func _player_tables(box: Control, ps: Dictionary, per: int, team: Dictionary) -> void:
+	var v := func(slot: String, k: String) -> float: return float(ps[slot][k]) / float(per)
+	var fmt := func(x: float) -> String: return str(int(round(x))) if per == 1 else "%.1f" % x
+	var who := func(slot: String) -> String:
+		var b: Brain = (team.get("brains", {}) as Dictionary).get(slot, null)
+		return slot if b == null else "%s %s" % [slot, b.name.split(" ")[0]]
+	if per > 1:
+		box.add_child(_label("Per game, over %d games. LNG is the longest." % per, fs - 2, Color(0.8, 0.82, 0.85)))
+	var tables := [
+		["Passing", ["C/ATT", "YDS", "TD", "INT", "SK"], func(s): return v.call(s, "att") > 0 or v.call(s, "sk") > 0,
+			func(s): return ["%s/%s" % [fmt.call(v.call(s, "cmp")), fmt.call(v.call(s, "att"))], fmt.call(v.call(s, "pyd")), fmt.call(v.call(s, "ptd")), fmt.call(v.call(s, "int")), fmt.call(v.call(s, "sk"))], "pyd"],
+		["Rushing", ["CAR", "YDS", "AVG", "TD", "LNG"], func(s): return v.call(s, "car") > 0,
+			func(s): return [fmt.call(v.call(s, "car")), fmt.call(v.call(s, "ryd")), "%.1f" % (float(ps[s]["ryd"]) / maxf(float(ps[s]["car"]), 1.0)), fmt.call(v.call(s, "rtd")), str(int(round(float(ps[s]["rlong"]))))], "ryd"],
+		["Receiving", ["REC/TGT", "YDS", "AVG", "TD", "LNG"], func(s): return v.call(s, "tgt") > 0,
+			func(s): return ["%s/%s" % [fmt.call(v.call(s, "rec")), fmt.call(v.call(s, "tgt"))], fmt.call(v.call(s, "recyd")), "%.1f" % (float(ps[s]["recyd"]) / maxf(float(ps[s]["rec"]), 1.0)), fmt.call(v.call(s, "rectd")), str(int(round(float(ps[s]["reclong"]))))], "recyd"],
+		["Defense", ["TKL", "SK", "INT", "PBU", "FF"], func(s): return Play.DEFENSE_SLOTS.has(s) and (v.call(s, "tkl") + v.call(s, "sack") + v.call(s, "dint") + v.call(s, "pbu") + v.call(s, "ff")) > 0,
+			func(s): return [fmt.call(v.call(s, "tkl")), fmt.call(v.call(s, "sack")), fmt.call(v.call(s, "dint")), fmt.call(v.call(s, "pbu")), fmt.call(v.call(s, "ff"))], "tkl"],
+	]
+	for tb in tables:
+		var slots: Array = ps.keys().filter(tb[2])
+		if slots.is_empty():
+			continue
+		var key: String = tb[4]
+		slots.sort_custom(func(a, b): return float(ps[a][key]) > float(ps[b][key]))
+		_section(box, tb[0])
+		var grid := GridContainer.new()
+		grid.columns = 6
+		grid.add_theme_constant_override("h_separation", 12)
+		grid.add_theme_constant_override("v_separation", 2)
+		box.add_child(grid)
+		var hl := _label("", fs - 2)
+		grid.add_child(hl)
+		for h in tb[1]:
+			var l := _label(h, fs - 2, Color(1, 0.85, 0.45))
+			l.autowrap_mode = TextServer.AUTOWRAP_OFF
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			grid.add_child(l)
+		for sl in slots:
+			var nl := _label(who.call(sl), fs - 2, Color(0.85, 0.9, 1))
+			nl.autowrap_mode = TextServer.AUTOWRAP_OFF
+			nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(nl)
+			for cell in tb[3].call(sl):
+				var l := _label(String(cell), fs - 2)
+				l.autowrap_mode = TextServer.AUTOWRAP_OFF
+				l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				grid.add_child(l)
 
 
 func show_game_over(g: Game) -> void:
-	var box := _open("Final")
-	var w := g.winner()
-	var head := "Tie game" if w < 0 else "%s win" % (g.teams[w]["coach"] as Coach).name
-	box.add_child(_label("%s   %s %d - %d %s" % [head, (g.teams[0]["coach"] as Coach).name, g.score[0], g.score[1], (g.teams[1]["coach"] as Coach).name], fs + 3))
-	_box_score(box, g.stats, [1, 1], [(g.teams[0]["coach"] as Coach).name, (g.teams[1]["coach"] as Coach).name])
+	show_stats(g, "final")
+
+
+func _final_extras(box: Control, g: Game) -> void:
 	_section(box, "Play calls (calls · yards a call)")
 	for t in 2:
 		box.add_child(_label(_calls_line(g.calls[t], Team.NAMES[t]), fs - 2))
@@ -621,10 +791,6 @@ func show_game_over(g: Game) -> void:
 	box.add_child(_label("\n".join(ds), fs - 2))
 	var bt: Array = g.get_meta("brain_tally", [{}, {}])
 	_rules_section(box, bt, g.coach_tally, [g.teams[0]["coach"], g.teams[1]["coach"]])
-	var row := HFlowContainer.new()
-	box.add_child(row)
-	row.add_child(_button("▶ Play again", func(): close_overlay(); main.new_game()))
-	row.add_child(_button("Sim ×10 these teams", func(): close_overlay(); main.run_batch(10)))
 
 
 func _calls_line(calls: Dictionary, who: String) -> String:
@@ -639,15 +805,15 @@ func _calls_line(calls: Dictionary, who: String) -> String:
 func _box_score(box: Control, stats: Array, per: Array, names: Array) -> void:
 	var g := GridContainer.new()
 	g.columns = 3
-	g.add_theme_constant_override("h_separation", 18)
+	g.add_theme_constant_override("h_separation", 12)
 	box.add_child(g)
 	var rows := [["", names[0], names[1]]]
 	var f := func(t: int, k: String) -> float: return float(stats[t].get(k, 0.0)) / float(per[t])
 	rows.append(["Points" if per[0] == 1 else "Points a game", "", ""])
 	rows.append(["Plays", "%.1f" % f.call(0, "plays"), "%.1f" % f.call(1, "plays")])
 	rows.append(["Yards", "%.0f" % f.call(0, "yards"), "%.0f" % f.call(1, "yards")])
-	rows.append(["Passing", _pass_line(stats[0], per[0]), _pass_line(stats[1], per[1])])
-	rows.append(["Rushing", _rush_line(stats[0], per[0]), _rush_line(stats[1], per[1])])
+	rows.append(["Pass C/A, yds (avg)", _pass_line(stats[0], per[0]), _pass_line(stats[1], per[1])])
+	rows.append(["Rush car-yds (avg)", _rush_line(stats[0], per[0]), _rush_line(stats[1], per[1])])
 	rows.append(["Sacks taken", "%.1f" % f.call(0, "sacks"), "%.1f" % f.call(1, "sacks")])
 	rows.append(["Turnovers", "%.1f" % f.call(0, "turnovers"), "%.1f" % f.call(1, "turnovers")])
 	rows.append(["3rd down", _rate(stats[0], "third_conv", "third_att"), _rate(stats[1], "third_conv", "third_att")])
@@ -664,12 +830,12 @@ func _box_score(box: Control, stats: Array, per: Array, names: Array) -> void:
 
 func _pass_line(s: Dictionary, n: int) -> String:
 	var att := float(s.get("pass_att", 0))
-	return "%.0f/%.0f, %.0f yds (%.1f a throw)" % [float(s.get("comp", 0)) / n, att / n, float(s.get("pass_yds", 0)) / n, float(s.get("pass_yds", 0)) / maxf(att, 1.0)]
+	return "%.0f/%.0f, %.0f (%.1f)" % [float(s.get("comp", 0)) / n, att / n, float(s.get("pass_yds", 0)) / n, float(s.get("pass_yds", 0)) / maxf(att, 1.0)]
 
 
 func _rush_line(s: Dictionary, n: int) -> String:
 	var att := float(s.get("rush_att", 0))
-	return "%.0f for %.0f (%.1f a carry)" % [att / n, float(s.get("rush_yds", 0)) / n, float(s.get("rush_yds", 0)) / maxf(att, 1.0)]
+	return "%.0f-%.0f (%.1f)" % [att / n, float(s.get("rush_yds", 0)) / n, float(s.get("rush_yds", 0)) / maxf(att, 1.0)]
 
 
 func _rate(s: Dictionary, a: String, b: String) -> String:
@@ -716,7 +882,34 @@ func show_batch(agg: Dictionary, names: Array) -> void:
 	for s in agg["scores"]:
 		sc.append("%d-%d" % [s[0], s[1]])
 	box.add_child(_label("Scores: " + ", ".join(sc), fs - 2, Color(0.8, 0.82, 0.85)))
-	_box_score(box, agg["stats"], [n, n], names)
+	var avg_line := [[], []]
+	for t in 2:
+		for q in 4:
+			avg_line[t].append(snappedf(float(agg["line"][t][q]) / n, 0.1))
+	box.add_child(_label("Points a quarter", fs - 1, Color(1, 0.85, 0.45)))
+	_line_score(box, names, avg_line, [snappedf(float(agg["points"][0]) / n, 0.1), snappedf(float(agg["points"][1]) / n, 0.1)])
+	var tabs := HFlowContainer.new()
+	tabs.add_theme_constant_override("h_separation", 6)
+	box.add_child(tabs)
+	var holder := VBoxContainer.new()
+	holder.add_theme_constant_override("separation", 8)
+	var teams_now := [Team.build(0, main.coaches[0], main.picks[0]), Team.build(1, main.coaches[1], main.picks[1])]
+	var fill := func(tab: String) -> void:
+		for ch in holder.get_children():
+			ch.queue_free()
+		if tab == "team":
+			_box_score(holder, agg["stats"], [n, n], names)
+		else:
+			var t := int(tab.substr(1))
+			_player_tables(holder, agg["pstats"][t], n, teams_now[t])
+		for b in tabs.get_children():
+			b.button_pressed = b.get_meta("tab") == tab
+	for tab in [["team", "Team"], ["p0", "%s players" % Team.NAMES[0]], ["p1", "%s players" % Team.NAMES[1]]]:
+		var b := _button(tab[1], func(): fill.call(tab[0]), true)
+		b.set_meta("tab", tab[0])
+		tabs.add_child(b)
+	box.add_child(holder)
+	fill.call("team")
 	_section(box, "Play calls (calls · yards a call)")
 	for t in 2:
 		box.add_child(_label(_calls_line(agg["calls"][t], Team.NAMES[t]), fs - 2))

@@ -33,6 +33,14 @@ var drive := {}                # the current drive: team, start, plays, yards
 var drives: Array = []
 var pending := {}              # the call for the snap in play
 var plays_run := 0
+var line := [[0, 0, 0, 0], [0, 0, 0, 0]]   # points a quarter
+var pstats := [{}, {}]         # per team: slot -> player box score
+var quarter_ends: Array = []   # a snapshot at the end of each quarter: {q, score, line, stats, pstats}
+
+## How each side picks its plays: "coach" (the coach's rules), "random" (any play in the book),
+## "generated" (a new play made up every down). Kicks on fourth down stay the coach's call.
+const CALLING := ["coach", "random", "generated"]
+const CALLING_LABEL := {"coach": "Coach calls", "random": "Random from playbook", "generated": "Random new plays"}
 
 
 func setup(red: Dictionary, blue: Dictionary, quarter_secs: float, seed_v: int) -> void:
@@ -99,7 +107,27 @@ func next_snap() -> Dictionary:
 	var dp: Play = Library.play(dd.get("play", ""))
 	if dp == null:
 		dp = Library.play(Library.plays_for("defense")[0])
-	pending = {"kind": "play", "off": op, "def": dp, "off_name": op.name, "def_name": dp.name}
+	pending = {"kind": "play", "off_text": "", "def_text": ""}
+	match String(offense().get("calling", "coach")):
+		"random":
+			var o: Array = Library.plays_for("offense")
+			op = Library.play(o[rng.randi() % o.size()])
+		"generated":
+			var g := PlayGen.offense(rng)
+			op = g["play"]
+			pending["off_text"] = g["text"]
+	match String(defense().get("calling", "coach")):
+		"random":
+			var d: Array = Library.plays_for("defense")
+			dp = Library.play(d[rng.randi() % d.size()])
+		"generated":
+			var g := PlayGen.defense(rng)
+			dp = g["play"]
+			pending["def_text"] = g["text"]
+	pending["off"] = op
+	pending["def"] = dp
+	pending["off_name"] = op.name
+	pending["def_name"] = dp.name
 	return pending
 
 
@@ -251,7 +279,7 @@ func _field_goal() -> Dictionary:
 	var good := rng.randf() < _fg_chance(dist)
 	var text := ""
 	if good:
-		score[poss] += 3
+		_pts(poss, 3)
 		st["fg"] = int(st["fg"]) + 1
 		text = "%s kick a %d-yard field goal. GOOD." % [who, int(round(dist))]
 		drive["result"] = "FG"
@@ -333,13 +361,18 @@ func finish(sim: PlaySim) -> Dictionary:
 	var desc := _describe(sim, op, dp, gain)
 	var e := {"kind": "play", "team": team, "off": op.name, "def": dp.name, "gain": gain, "why": r["why"], "text": desc,
 		"down": was_down, "to_go": was_to_go, "yl": yl}
+	_player_stats(sim, team, gain)
+	if pending.get("off_text", "") != "":
+		e["off_text"] = pending["off_text"]
+	if pending.get("def_text", "") != "":
+		e["def_text"] = pending["def_text"]
 	var elapsed := float(r["t"])
 	# the outcome
 	if r.get("def_td", false):
 		st["turnovers"] = int(st["turnovers"]) + 1
 		st["ints"] = int(st["ints"]) + (1 if r["turnover"] == "int" else 0)
 		dst["td"] = int(dst["td"]) + 1
-		score[1 - team] += 6
+		_pts(1 - team, 6)
 		e["text"] += " Returned for a TOUCHDOWN!"
 		drive["result"] = "pick six"
 		_pat(1 - team)
@@ -365,7 +398,7 @@ func finish(sim: PlaySim) -> Dictionary:
 		_new_drive()
 		_tick(elapsed, true)
 	elif r.get("safety", false):
-		score[1 - team] += 2
+		_pts(1 - team, 2)
 		e["text"] += " SAFETY."
 		drive["result"] = "safety"
 		_tick(elapsed, true)
@@ -379,7 +412,7 @@ func finish(sim: PlaySim) -> Dictionary:
 		st["td"] = int(st["td"]) + 1
 		st["yards"] = float(st["yards"]) + gain
 		drive["yards"] = float(drive["yards"]) + gain
-		score[team] += 6
+		_pts(team, 6)
 		drive["result"] = "TD"
 		_pat(team)
 		_tick(elapsed, true)
@@ -430,9 +463,100 @@ func _advance_down(gain: float) -> void:
 		_new_drive()
 
 
+## The player box score.
+const PSTAT_KEYS := ["cmp", "att", "pyd", "ptd", "int", "sk", "skyd", "car", "ryd", "rtd", "rlong",
+	"tgt", "rec", "recyd", "rectd", "reclong", "tkl", "sack", "dint", "pbu", "ff", "fr", "mt", "dtd", "fum"]
+
+
+func _ps(t: int, slot: String) -> Dictionary:
+	if slot == "":
+		return {}
+	if not pstats[t].has(slot):
+		var d := {}
+		for k in PSTAT_KEYS:
+			d[k] = 0.0
+		pstats[t][slot] = d
+	return pstats[t][slot]
+
+
+func _add(t: int, slot: String, k: String, v := 1.0) -> void:
+	if slot == "":
+		return
+	var d := _ps(t, slot)
+	d[k] = float(d[k]) + v
+
+
+func _long(t: int, slot: String, k: String, v: float) -> void:
+	if slot == "":
+		return
+	var d := _ps(t, slot)
+	d[k] = maxf(float(d[k]), v)
+
+
+func _player_stats(sim: PlaySim, off_t: int, gain: float) -> void:
+	var r: Dictionary = sim.result
+	var st: Dictionary = r["stat"]
+	var def_t := 1 - off_t
+	var offense_carrier := int(r.get("carrier_side", 0)) == 0
+	if r["pass"]:
+		var tgt := String(st.get("target", ""))
+		if tgt != "":
+			_add(off_t, "QB", "att")
+			_add(off_t, tgt, "tgt")
+		if r.has("pass_yds"):
+			var rcv := String(st.get("catch_slot", ""))
+			_add(off_t, "QB", "cmp")
+			_add(off_t, "QB", "pyd", gain)
+			_add(off_t, rcv, "rec")
+			_add(off_t, rcv, "recyd", gain)
+			_long(off_t, rcv, "reclong", gain)
+			if r["td"] and offense_carrier:
+				_add(off_t, "QB", "ptd")
+				_add(off_t, rcv, "rectd")
+		if r["turnover"] == "int":
+			_add(off_t, "QB", "int")
+	elif r["sack"]:
+		_add(off_t, "QB", "sk")
+		_add(off_t, "QB", "skyd", gain)
+	elif r.has("rush_yds") or st.has("fumbler"):
+		var ru := String(st.get("rusher", r["carrier"]))
+		_add(off_t, ru, "car")
+		if r.has("rush_yds"):
+			_add(off_t, ru, "ryd", gain)
+			_long(off_t, ru, "rlong", gain)
+			if r["td"] and offense_carrier:
+				_add(off_t, ru, "rtd")
+	# defense (and offense, when they tackle after a turnover)
+	for k in st:
+		var ks := String(k)
+		if ks.begins_with("sack:"):
+			_add(def_t, ks.substr(5), "sack")
+		elif ks.begins_with("int_by:"):
+			_add(def_t, ks.substr(7), "dint")
+		elif ks.begins_with("missed:"):
+			_add(def_t if offense_carrier else off_t, ks.substr(7), "mt", float(st[k]))
+		elif ks.begins_with("fumble:"):
+			_add(off_t, ks.substr(7), "fum")
+	if st.has("tackler") and r["why"] in ["tackle", "sack"] or (st.has("tackler") and st.has("ff_by")):
+		_add(def_t if offense_carrier else off_t, String(st["tackler"]), "tkl")
+	if st.has("pbu_by"):
+		_add(def_t, String(st["pbu_by"]), "pbu")
+	if st.has("ff_by"):
+		_add(def_t, String(st["ff_by"]), "ff")
+	if st.has("fr_by"):
+		_add(def_t, String(st["fr_by"]), "fr")
+	if r.get("def_td", false):
+		_add(def_t, String(r["carrier"]), "dtd")
+
+
+func _pts(t: int, n: int) -> void:
+	score[t] += n
+	line[t][clampi(quarter, 1, 4) - 1] += n
+
+
 func _pat(team: int) -> void:
 	if rng.randf() < 0.94:
-		score[team] += 1
+		_pts(team, 1)
 
 
 func _tick(secs: float, _stops: bool) -> void:
@@ -440,6 +564,8 @@ func _tick(secs: float, _stops: bool) -> void:
 	st["top"] = float(st["top"]) + minf(secs, clock)
 	clock -= secs
 	if clock <= 0.0:
+		quarter_ends.append({"q": quarter, "score": score.duplicate(), "line": line.duplicate(true),
+			"stats": stats.duplicate(true), "pstats": pstats.duplicate(true)})
 		quarter += 1
 		clock = qlen
 		if quarter == 3:
@@ -499,5 +625,5 @@ func _describe(sim: PlaySim, op: Play, dp: Play, gain: float) -> String:
 
 ## Everything in one dictionary, for the result panel and the batch.
 func summary() -> Dictionary:
-	return {"score": score.duplicate(), "winner": winner(), "stats": stats.duplicate(true), "calls": calls.duplicate(true),
+	return {"line": line.duplicate(true), "pstats": pstats.duplicate(true), "score": score.duplicate(), "winner": winner(), "stats": stats.duplicate(true), "calls": calls.duplicate(true),
 		"drives": drives.duplicate(true), "plays": plays_run, "coach_tally": coach_tally.duplicate(true)}

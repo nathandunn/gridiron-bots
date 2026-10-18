@@ -55,6 +55,14 @@ lineup:
   *did you mean …* suggestions, a word list per file kind (tap to insert, with an example),
   completion after a space, Save / Reset to shipped / Copy as new. Edits are kept in the browser
   and used from the next snap.
+- **Play calling** (Teams panel, per side, offense and defense): *Coach calls*, *Random from
+  playbook* (any play, every down), or *Random new plays* — a fresh play made up every down
+  (`scripts/play_gen.gd`: formation, routes and depths, run gaps and pulls, shells, man matchups
+  and blitzes), written as ordinary play text. The coach still decides punts and field goals.
+  Generated plays can be saved to the playbook from the Log.
+- **Box scores** — line score by quarter, team box and a player box per side (passing, rushing,
+  receiving, defense: tackles, sacks, INTs, PBUs, forced fumbles). The game stops at each quarter
+  break and at the end; **Stats** shows it any time; Sim ×N gives per-game averages.
 - **Sim ×10 / ×50** — whole games with nothing drawn: wins, box score, yards a call for every
   play, and which coach and brain rules did the work.
 - **Log** — play by play. **Views** — behind the offense (phones), sideline, overhead.
@@ -65,6 +73,7 @@ godot --headless --path . -- --sim=20 --red=Balanced --blue="Air Raid" [--q=300]
 godot --headless --path . -- --plays=20 [--off=Smash] [--def="Cover 2"]    # play-vs-play lab
 godot --headless --path . -- --lint=ai/02-qb-gunslinger.ai
 godot --headless --path . -- --sim=20 --redpicks=QB:Scrambler,CB:Ball_Hawk
+godot --headless --path . -- --sim=1 --redcall=generated --bluecall=random --box  # box score by quarter
 godot --headless --path . -- --sim=20 --k=tackle:0.9,throw_err:1.5         # engine knobs
 ```
 

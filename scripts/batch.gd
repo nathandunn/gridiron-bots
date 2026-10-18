@@ -36,7 +36,7 @@ static func _fold_tally(g: Game, sim: PlaySim) -> void:
 
 ## Add up a list of finished games.
 static func aggregate(games: Array) -> Dictionary:
-	var out := {"n": games.size(), "wins": [0, 0], "ties": 0, "points": [0, 0], "stats": [{}, {}],
+	var out := {"pstats": [{}, {}], "line": [[0, 0, 0, 0], [0, 0, 0, 0]], "n": games.size(), "wins": [0, 0], "ties": 0, "points": [0, 0], "stats": [{}, {}],
 		"calls": [{}, {}], "brain_tally": [{}, {}], "coach_tally": [{}, {}], "scores": []}
 	for g in games:
 		var gm: Game = g
@@ -48,6 +48,20 @@ static func aggregate(games: Array) -> Dictionary:
 		out["scores"].append(gm.score.duplicate())
 		for t in 2:
 			out["points"][t] += gm.score[t]
+			for q in 4:
+				out["line"][t][q] += gm.line[t][q]
+			for slot in gm.pstats[t]:
+				if not out["pstats"][t].has(slot):
+					var z := {}
+					for k in Game.PSTAT_KEYS:
+						z[k] = 0.0
+					out["pstats"][t][slot] = z
+				var acc: Dictionary = out["pstats"][t][slot]
+				for k in Game.PSTAT_KEYS:
+					if String(k).ends_with("long"):
+						acc[k] = maxf(float(acc[k]), float(gm.pstats[t][slot][k]))
+					else:
+						acc[k] = float(acc[k]) + float(gm.pstats[t][slot][k])
 			for k in gm.stats[t]:
 				out["stats"][t][k] = float(out["stats"][t].get(k, 0.0)) + float(gm.stats[t][k])
 			for n in gm.calls[t]:

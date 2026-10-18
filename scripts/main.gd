@@ -13,6 +13,7 @@ var red_coach := "Balanced"
 var blue_coach := "Air Raid"
 var coaches := ["Balanced", "Air Raid"]
 var picks := [{}, {}]
+var calling := ["coach", "coach"]   # how each side picks plays: coach / random / generated
 var qlen := 300.0
 var speed := 1.0
 var paused := false
@@ -41,6 +42,9 @@ func _ready() -> void:
 	qlen = float(args.get("q", qlen))
 	for t in 2:
 		var key: String = ["red", "blue"][t]
+		if args.has(key + "call"):
+			# --redcall=random | generated | coach
+			calling[t] = String(args[key + "call"])
 		if args.has(key + "picks"):
 			# --redpicks=QB:Scrambler,WR:Burner
 			for kv in String(args[key + "picks"]).split(",", false):
@@ -53,6 +57,12 @@ func _ready() -> void:
 	_build_ui()
 	if args.has("speed"):
 		set_speed(float(args["speed"]))
+	for t in 2:
+		var key: String = ["red", "blue"][t]
+		if args.has(key + "call"):
+			calling[t] = String(args[key + "call"])
+	if args.has("redcall") or args.has("bluecall"):
+		new_game()
 	if args.has("shot"):
 		# --shot=out.png --at=6 [--panel=teams|editor|log] : a screenshot for checking the look
 		var at := float(args.get("at", "6"))
@@ -64,6 +74,7 @@ func _ready() -> void:
 			"play": hud.open_editor("play")
 			"log": hud.open_log()
 			"batch": run_batch(int(args.get("n", "3")))
+			"stats": hud._stats_tab = String(args.get("tab", "team")); hud.show_stats(game, "live")
 		await get_tree().create_timer(float(args.get("after", "0.6"))).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(String(args["shot"]))
@@ -101,8 +112,8 @@ func _lint(path: String) -> void:
 
 func _headless(args: Dictionary) -> void:
 	var seed_v := int(args.get("seed", "1"))
-	var red := Team.build(0, red_coach, picks[0])
-	var blue := Team.build(1, blue_coach, picks[1])
+	var red := Team.build(0, red_coach, picks[0], calling[0])
+	var blue := Team.build(1, blue_coach, picks[1], calling[1])
 	if args.has("plays"):
 		_play_lab(red, blue, int(args["plays"]), seed_v, args)
 		get_tree().quit()
@@ -118,6 +129,24 @@ func _headless(args: Dictionary) -> void:
 			for e in g.log:
 				print("Q%d %s  %d-%d  %s" % [e["q"], _clock(e["clock"]), e["score"][0], e["score"][1], e["text"]])
 		print("game %d: %s %d - %d %s (%d plays)" % [i + 1, red_coach, g.score[0], g.score[1], blue_coach, g.plays_run])
+	if args.has("box"):
+		var lg: Game = games[games.size() - 1]
+		for q in lg.quarter_ends:
+			print("end of Q%d: %d-%d  line %s" % [q["q"], q["score"][0], q["score"][1], q["line"]])
+		for t in 2:
+			print("== ", Team.NAMES[t])
+			for slot in lg.pstats[t]:
+				var d: Dictionary = lg.pstats[t][slot]
+				var parts := []
+				for k in Game.PSTAT_KEYS:
+					if float(d[k]) != 0.0:
+						parts.append("%s %s" % [k, str(snappedf(float(d[k]), 0.1))])
+				print("  %-5s %s" % [slot, " ".join(parts)])
+		var gen := 0
+		for e in lg.log:
+			if e.has("off_text") and gen < 1:
+				print(e["off_text"])
+				gen += 1
 	var agg := Batch.aggregate(games)
 	print("--- %d games, %.1fs" % [n, (Time.get_ticks_msec() - t0) / 1000.0])
 	print("%s wins %d, %s wins %d, ties %d" % [red_coach, agg["wins"][0], blue_coach, agg["wins"][1], agg["ties"]])
@@ -218,6 +247,8 @@ const AFTER := 1.4
 var _wait := 0.0
 var _skip_drive := false
 var _batch_team := -1
+var stop_at_quarters := true
+var _seen_q := 0
 
 
 func _build_ui() -> void:
@@ -262,9 +293,10 @@ func _scale_for_phone() -> void:
 func new_game() -> void:
 	game = Game.new()
 	var seed_v := randi()
-	game.setup(Team.build(0, coaches[0], picks[0]), Team.build(1, coaches[1], picks[1]), qlen, seed_v)
+	game.setup(Team.build(0, coaches[0], picks[0], calling[0]), Team.build(1, coaches[1], picks[1], calling[1]), qlen, seed_v)
 	sim = null
 	_skip_drive = false
+	_seen_q = 0
 	hud.show_call("")
 	hud.show_result("Kick-off: %s receive" % Team.NAMES[game.poss])
 	_next()
@@ -275,13 +307,19 @@ func library_changed() -> void:
 	if game == null:
 		return
 	for t in 2:
-		var nt := Team.build(t, coaches[t], picks[t])
+		var nt := Team.build(t, coaches[t], picks[t], calling[t])
 		game.teams[t]["coach"] = nt["coach"]
 		game.teams[t]["brains"] = nt["brains"]
+		game.teams[t]["calling"] = nt["calling"]
 
 
 func overlay_changed(open: bool) -> void:
 	cam.input_blocked = open
+
+
+func resume_after_break() -> void:
+	if _phase == "qbreak":
+		_next()
 
 
 func toggle_pause() -> void:
@@ -305,6 +343,15 @@ func skip_drive() -> void:
 ## Ask the coaches for the next snap; kicks resolve at once and are shown as a note.
 func _next() -> void:
 	hud.show_state(game)
+	# a quarter just ended: show the box score and wait for Continue
+	if game.quarter_ends.size() > _seen_q:
+		_seen_q = game.quarter_ends.size()
+		var snap: Dictionary = game.quarter_ends[_seen_q - 1]
+		if not game.over and stop_at_quarters:
+			_skip_drive = false
+			_phase = "qbreak"
+			hud.show_stats(game, "quarter", snap)
+			return
 	if game.over:
 		sim = null
 		view.set_play(null, game.poss, game.yl, game.to_go)
@@ -339,6 +386,9 @@ func _process(delta: float) -> void:
 		return
 	if _batch_left > 0:
 		_batch_step()
+		return
+	if _phase == "qbreak" and not hud.any_overlay():
+		_next()   # the break panel was closed without Continue
 		return
 	if paused or hud.any_overlay() and _phase != "over":
 		return
@@ -397,7 +447,7 @@ func run_batch(n: int) -> void:
 
 func _batch_step() -> void:
 	var i := _batch_games.size()
-	var g := Batch.play_game(Team.build(0, coaches[0], picks[0]), Team.build(1, coaches[1], picks[1]), qlen, _batch_seed + i)
+	var g := Batch.play_game(Team.build(0, coaches[0], picks[0], calling[0]), Team.build(1, coaches[1], picks[1], calling[1]), qlen, _batch_seed + i)
 	_batch_games.append(g)
 	_batch_left -= 1
 	hud.set_progress("Simulating... %d / %d" % [_batch_games.size(), _batch_games.size() + _batch_left])
