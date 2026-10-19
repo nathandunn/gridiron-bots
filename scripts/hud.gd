@@ -705,7 +705,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.add_child(d)
 		d.setup(p)
-		var nl := _label(p.name.replace("Gen ", ""), fs - 2, YELLOW)
+		var nl := _label(("%s · %s" % [p.name, "run" if p.kind == "run" else "pass"]) if side == "offense" else p.name, fs - 2, YELLOW)
 		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		nl.clip_text = true
@@ -732,6 +732,8 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 
 
 func _play_subline(p: Play) -> String:
+	if p.about != "" and not p.about.begins_with("Made up"):
+		return p.about
 	if p.side == "offense":
 		var qb: Dictionary = p.assigns.get("QB", {})
 		if p.kind == "run":

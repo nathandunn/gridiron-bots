@@ -224,6 +224,9 @@ func _line_up() -> void:
 					spot = Vector2(0, -7.0)
 			_:
 				spot = OFFENSE_SPOTS[p.slot]
+		if off_play.align.has(p.slot):
+			spot = off_play.align[p.slot]
+			spot.y = minf(spot.y, -0.6)
 		p.pos = Vector2(ball_x + spot.x, spot.y)
 		if p.group == "WR" or p.slot == "RB" and off_play.formation == "empty":
 			p.pos.x = clampf(p.pos.x, -SIDELINE + 2.0, SIDELINE - 2.0)
@@ -241,6 +244,9 @@ func _line_up() -> void:
 		if p.group == "LB" and goal_line:
 			at.y = 2.5
 		at.y = minf(at.y, maxf(to_goal + 0.5, 1.0)) if p.group != "DL" else at.y
+		if def_play.align.has(p.slot):
+			var al: Vector2 = def_play.align[p.slot]
+			at = Vector2(ball_x + al.x, clampf(al.y, 0.9, maxf(to_goal + 0.5, 1.0)))
 		p.pos = at
 		p.face = Vector2(0, -1)
 	for p: P in players:
@@ -255,15 +261,24 @@ func _line_up() -> void:
 					on = {"CB1": "WR1", "CB2": "WR2", "SS": "TE", "FS": "WR3", "OLB1": "WR3", "MLB": "RB", "OLB2": "TE"}.get(p.slot, "RB")
 				p.cover = by_slot["o:" + on]
 			"zone":
-				var z: Array = ZONE_SPOT[p.assign["zone"]]
-				var a: Vector2 = z[0]
-				p.zone_anchor = Vector2(clampf(ball_x * 0.5 + a.x, -SIDELINE + 3, SIDELINE - 3), minf(a.y, maxf(to_goal + 2.0, 3.0)))
-				p.zone_r = z[1]
+				if p.assign.has("at"):
+					var at2: Vector2 = p.assign["at"]
+					p.zone_anchor = Vector2(clampf(ball_x + at2.x, -SIDELINE + 2, SIDELINE - 2), clampf(minf(at2.y, to_goal + 2.0), 1.0, 40.0))
+					p.zone_r = float(p.assign.get("size", 7.0))
+				else:
+					var z: Array = ZONE_SPOT[p.assign["zone"]]
+					var a: Vector2 = z[0]
+					p.zone_anchor = Vector2(clampf(ball_x * 0.5 + a.x, -SIDELINE + 3, SIDELINE - 3), minf(a.y, maxf(to_goal + 2.0, 3.0)))
+					p.zone_r = z[1]
 	# line up over the man you have, or toward your zone
 	for p: P in dfn:
-		if p.group == "DL":
+		if p.group == "DL" or def_play.align.has(p.slot):
 			continue
-		if p.cover != null and p.group != "CB":
+		if p.cover != null and p.group == "CB" and not (p.cover.slot == ("WR1" if p.slot == "CB1" else "WR2")):
+			# a corner on someone other than his usual receiver lines up over that man
+			var mc := p.cover
+			p.pos = Vector2(mc.pos.x + signf(ball_x - mc.pos.x) * 0.8, minf(1.5 if press else 6.0, maxf(to_goal - 0.5, 1.0)))
+		elif p.cover != null and p.group != "CB":
 			var m := p.cover
 			var inside := signf(ball_x - m.pos.x) if absf(m.pos.x - ball_x) > 1.0 else 0.0
 			var depth := 4.5 if p.group == "LB" else 6.0
@@ -284,6 +299,20 @@ func _line_up() -> void:
 
 
 ## Route waypoints, absolute. "Out" means toward the near sideline.
+## Where a run is aimed (yards across from the ball), for a named gap or "run at X".
+static func gap_x_of(a: Dictionary) -> float:
+	if a.has("gap_x"):
+		return float(a["gap_x"])
+	return float(GAP_X.get(String(a.get("gap", "middle")), 0.0))
+
+
+static func gap_wide(a: Dictionary) -> bool:
+	if a.has("gap_x"):
+		return absf(float(a["gap_x"])) > 4.0
+	var g := String(a.get("gap", ""))
+	return g.begins_with("sweep") or g.begins_with("outside")
+
+
 func _build_route(p: P) -> void:
 	var o := 1.0 if p.pos.x >= ball_x - 0.5 else -1.0      # outside direction
 	if p.slot == "RB" and absf(p.pos.x - ball_x) < 2.0:
@@ -295,6 +324,10 @@ func _build_route(p: P) -> void:
 	var stop := false
 	var dp := func(def: float) -> float: return dep if dep > 0.0 else def
 	match name:
+		"path":
+			for q in p.assign["path"]:
+				w.append(s + (q as Vector2))
+			stop = bool(p.assign.get("stop", false))
 		"go", "fade":
 			w = [s + Vector2(o * (1.5 if name == "fade" else 0.3), 12), s + Vector2(o * (3.0 if name == "fade" else 0.5), 45)]
 		"seam":
@@ -1370,11 +1403,11 @@ func _handoff(qb: P, rb: P) -> void:
 ## The carrier, before he has the ball, heads for the mesh and then the hole.
 func _drive_carry_path(p: P) -> void:
 	var gap := String(p.assign.get("gap", "middle"))
-	var gx: float = ball_x + GAP_X.get(gap, 0.0)
+	var gx: float = ball_x + gap_x_of(p.assign)
 	if gap == "draw" and t < 0.9:
 		_set_want(p, Vector2.ZERO)
 		return
-	if gap.begins_with("sweep") or gap.begins_with("outside"):
+	if gap_wide(p.assign):
 		_toward(p, Vector2(gx, -2.5), 1.0, 0.0)
 	else:
 		_toward(p, Vector2(gx, -1.2), 0.9, 0.0)
@@ -1397,9 +1430,9 @@ func _drive_carrier(p: P) -> void:
 		since_handoff = t - 0.3
 	if (handed or keeper) and p == by_slot.get("o:" + carry_slot) and since_handoff < 0.25 + 0.6 * p.d("patience") and p.intent == "assignment" and p.side == 0:
 		var gap := String(p.assign.get("gap", "middle"))
-		var gx: float = ball_x + GAP_X.get(gap, 0.0)
+		var gx: float = ball_x + gap_x_of(p.assign)
 		var aim := Vector2(gx, p.pos.y + 3.0)
-		if gap.begins_with("sweep") or gap.begins_with("outside"):
+		if gap_wide(p.assign):
 			# get to the edge at the line, then turn it up
 			aim = Vector2(gx, 1.0) if absf(p.pos.x - gx) > 1.5 else Vector2(gx, p.pos.y + 4.0)
 		_toward(p, aim, 1.0, 0.0)
@@ -1478,7 +1511,7 @@ func _steer(p: P) -> Vector2:
 			s -= 6.0
 		s -= maxf(absf(end.x) - 21.0, 0.0) * 0.35
 		# behind the line on an inside run, going sideways is going nowhere
-		if p.side == 0 and p.pos.y < 1.0 and not String(p.assign.get("gap", "")).begins_with("sweep") and not String(p.assign.get("gap", "")).begins_with("outside"):
+		if p.side == 0 and p.pos.y < 1.0 and not gap_wide(p.assign):
 			s -= absf(h.x) * 1.2
 		s += h.dot(p.heading) * (0.6 - 0.3 * float(p.body["agility"]))
 		if s > bs:
@@ -1829,7 +1862,7 @@ func _assign_blocks() -> void:
 func _assign_run_blocks(blocking: Array) -> void:
 	var cs := by_slot.get("o:" + carry_slot) as P
 	var gap := String(cs.assign.get("gap", "middle")) if cs != null else "middle"
-	var hole := ball_x + float(GAP_X.get(gap, 0.0))
+	var hole := ball_x + (gap_x_of(cs.assign) if cs != null else 0.0)
 	var side := signf(hole - ball_x)
 	var box: Array = []
 	for e: P in dfn:
@@ -1964,7 +1997,7 @@ func _resolve_blocks() -> void:
 			# the blocker is winning: he turns his man away from the hole and opens it
 			var hole := carrier.pos.x
 			if carrier.side == 0 and carrier.pos.y < 0.5 and String(carrier.assign.get("gap", "")) != "":
-				hole = ball_x + float(GAP_X.get(String(carrier.assign["gap"]), 0.0))
+				hole = ball_x + gap_x_of(carrier.assign)
 			var away := signf(e.pos.x - hole) if absf(e.pos.x - hole) > 0.1 else signf(e.pos.x - b.pos.x + 0.001)
 			var pd := Vector2(away, 0.6).normalized()
 			e.mem["_push"] = pd * -rate

@@ -44,7 +44,7 @@ func setup(p: Play) -> void:
 	for q in sim.off:
 		var pl: PlaySim.P = q
 		_off.append({"slot": pl.slot, "pos": pl.pos, "kind": String(pl.assign.get("kind", "")), "route": pl.route.duplicate(),
-			"gap": String(pl.assign.get("gap", "")), "dir": int(pl.assign.get("dir", 1)), "chip": bool(pl.assign.get("chip", false))})
+			"gap": String(pl.assign.get("gap", "")), "gx": PlaySim.gap_x_of(pl.assign), "dir": int(pl.assign.get("dir", 1)), "chip": bool(pl.assign.get("chip", false))})
 		if pl.slot == "QB":
 			_qb = pl.pos
 	for q in sim.dfn:
@@ -112,7 +112,7 @@ func _draw_offense(r: float) -> void:
 				_path(pts, CHALK)
 			"carry":
 				# the run: to the mesh, then through the hole
-				var gx: float = PlaySim.GAP_X.get(o["gap"], 0.0)
+				var gx: float = o["gx"]
 				var mesh := Vector2(gx * 0.35, minf(o["pos"].y + 2.0, -1.0))
 				_path([at, _to(mesh), _to(Vector2(gx, 4.0))], RUN, 2.2)
 			"pull":

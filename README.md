@@ -62,10 +62,15 @@ Real football rules, 11 a side.
   *did you mean …* suggestions, a word list per file kind (tap to insert, with an example),
   completion after a space, Save / Reset to shipped / Copy as new. Edits are kept in the browser
   and used from the next snap.
-- **Call your own plays** (Red's default): each down you're dealt a hand of 8 brand-new plays —
-  offense or defense — each card with a chalkboard diagram drawn from the engine's own alignment
-  (routes, run path, blocks; zones, man lines, blitz arrows). Tap one, deal a new hand, or let the
-  coach call it; on 4th down you can punt or kick. Set both sides to *You pick* for two players.
+- **Call your own plays** (Red's default): each down you're dealt a hand of 8 plays **designed
+  from nothing** (`scripts/play_gen.gd`). Offense: skill players line up anywhere (receivers across
+  the field, TE attached or flexed, back deep, offset or split wide, QB under centre or at any
+  depth), every receiver gets a freehand route (1-3 legs of random direction and length, sometimes
+  sitting down), random drop and read order; or a run aimed at any point on the line with random
+  pullers, lead blocks and decoy routes. Defense: each of the eleven gets a random job (rush,
+  blitz, man on a random receiver, a zone of random size anywhere, or spy) and a random spot.
+  Each card has a diagram drawn from the engine's own alignment. Tap one, deal a new hand, or
+  let the coach call it; punt or kick on 4th down.
 - **Play calling** (Teams panel, per side, offense and defense): *You pick*, *Coach calls*, *Random from
   playbook* (any play, every down), or *Random new plays* — a fresh play made up every down
   (`scripts/play_gen.gd`: formation, routes and depths, run gaps and pulls, shells, man matchups
@@ -86,6 +91,15 @@ godot --headless --path . -- --lint=ai/02-qb-gunslinger.ai
 godot --headless --path . -- --sim=20 --redpicks=QB:Scrambler,CB:Ball_Hawk
 godot --headless --path . -- --sim=1 --redcall=generated --bluecall=random --box  # box score by quarter
 godot --headless --path . -- --sim=20 --k=tackle:0.9,throw_err:1.5         # engine knobs
+```
+
+## Play language extras (used by designed plays, usable by hand)
+```
+WR1 at -14 -1                     # line up 14 yards left of the ball, a yard off the line
+WR1: route path 0 6 -5 12 -5 30   # freehand route: (across, downfield) points from the start
+TE: block then route path 2 4 stop # chip, release, sit down at the end
+RB: run at 6.5                    # aim the run 6.5 yards right of the ball
+FS: zone at -8 14 size 9          # guard a 9-yard zone centred 8 left, 14 deep
 ```
 
 ## Engine (`scripts/`)

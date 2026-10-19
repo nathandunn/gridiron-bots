@@ -43,6 +43,7 @@ var kind := "pass"            # offense: pass / run; defense: man / zone / blitz
 var formation := "shotgun"
 var front := "even"
 var assigns := {}             # slot -> {kind, ...}
+var align := {}               # slot -> Vector2 (x from the ball, y from the line): where he lines up, if set
 var errors: Array[String] = []
 var source := ""
 
@@ -75,6 +76,14 @@ static func parse(text: String) -> Play:
 			p.front = low.substr(6).strip_edges()
 			if not FRONTS.has(p.front):
 				p.errors.append("line %d: fronts are %s" % [ln, ", ".join(FRONTS)])
+		elif _is_align(low):
+			# WR1 at -14 -1 : line up 14 yards left of the ball, a yard off the line
+			var t := low.split(" ", false)
+			var who := t[0].to_upper()
+			if not SLOT_GROUP.has(who):
+				p.errors.append("line %d: no position '%s'" % [ln, who])
+				continue
+			p.align[who] = Vector2(float(t[2]), float(t[3]))
 		elif low.find(":") > 0:
 			var c := low.find(":")
 			var who := low.substr(0, c).strip_edges().to_upper()
@@ -110,6 +119,33 @@ static func parse(text: String) -> Play:
 	return p
 
 
+static func _is_align(low: String) -> bool:
+	var t := low.split(" ", false)
+	return t.size() == 4 and t[1] == "at" and t[2].is_valid_float() and t[3].is_valid_float()
+
+
+## "route path 0 6 -5 12 -5 30 [stop]": waypoints as (across, downfield) yards from where he starts.
+func _path(words: Array, ln: int, a: Dictionary) -> bool:
+	var nums: Array = []
+	a["stop"] = false
+	for w in words:
+		if w == "stop":
+			a["stop"] = true
+		elif String(w).is_valid_float():
+			nums.append(float(w))
+		else:
+			errors.append("line %d: a path is pairs of numbers (across, downfield), then 'stop' if he sits" % ln)
+			return false
+	if nums.size() < 2 or nums.size() % 2 == 1:
+		errors.append("line %d: a path needs pairs of numbers - across and downfield for each point" % ln)
+		return false
+	var pts: Array = []
+	for i in range(0, nums.size(), 2):
+		pts.append(Vector2(nums[i], nums[i + 1]))
+	a["path"] = pts
+	return true
+
+
 func _assignment(what: String, ln: int) -> Dictionary:
 	var w := what.split(" ", false)
 	if w.is_empty():
@@ -143,6 +179,11 @@ func _assignment(what: String, ln: int) -> Dictionary:
 		"handoff":
 			a["kind"] = "handoff"
 		"run", "carry":
+			if w.size() == 3 and w[1] == "at" and w[2].is_valid_float():
+				a["kind"] = "carry"
+				a["gap"] = "custom"
+				a["gap_x"] = float(w[2])
+				return a
 			var gap := " ".join(w.slice(1))
 			if not GAPS.has(gap):
 				errors.append("line %d: gaps are %s" % [ln, ", ".join(GAPS)])
@@ -165,6 +206,12 @@ func _assignment(what: String, ln: int) -> Dictionary:
 				else:
 					errors.append("line %d: 'block', 'block then route ...' or 'block lead'" % ln)
 					return {}
+			if rest.size() >= 3 and rest[1] == "path":
+				a["kind"] = "route"
+				a["route"] = "path"
+				if not _path(rest.slice(2), ln, a):
+					return {}
+				return a
 			if rest.size() < 2 or not ROUTES.has(rest[1]):
 				errors.append("line %d: routes are %s" % [ln, ", ".join(ROUTES)])
 				return {}
@@ -188,6 +235,12 @@ func _assignment(what: String, ln: int) -> Dictionary:
 				errors.append("line %d: man on RB, WR1, WR2, WR3 or TE" % ln)
 				return {}
 		"zone":
+			if w.size() >= 4 and w[1] == "at" and w[2].is_valid_float() and w[3].is_valid_float():
+				a["kind"] = "zone"
+				a["zone"] = "custom"
+				a["at"] = Vector2(float(w[2]), float(w[3]))
+				a["size"] = float(w[5]) if w.size() >= 6 and w[4] == "size" and w[5].is_valid_float() else 7.0
+				return a
 			var z := " ".join(w.slice(1))
 			if not ZONES.has(z):
 				errors.append("line %d: zones are %s" % [ln, ", ".join(ZONES)])
