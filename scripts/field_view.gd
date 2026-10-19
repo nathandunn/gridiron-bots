@@ -206,9 +206,11 @@ func _build_field() -> void:
 ## Where a play-frame point is in the world.
 func world(p: Vector2, h := 0.0) -> Vector3:
 	var a := yl + p.y                 # yards from the offense's own goal line
+	# the camera stands behind the offense, so the play's right (+x) must be the screen's right:
+	# looking down +z, screen right is world -x
 	if poss == 0:
-		return Vector3(p.x, h, a - 50.0)
-	return Vector3(-p.x, h, 50.0 - a)
+		return Vector3(-p.x, h, a - 50.0)
+	return Vector3(p.x, h, 50.0 - a)
 
 
 ## The direction the offense attacks, in the world.

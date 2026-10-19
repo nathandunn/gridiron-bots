@@ -80,6 +80,7 @@ func _ready() -> void:
 			"play": hud.open_editor("play")
 			"log": hud.open_log()
 			"batch": run_batch(int(args.get("n", "3")))
+			"toast": hud.toast(String(args.get("text", "TURNOVER ON DOWNS\nBlue ball")).replace("|", "\n"), 5.0)
 			"stats": hud._stats_tab = String(args.get("tab", "team")); hud.show_stats(game, "live")
 		await get_tree().create_timer(float(args.get("after", "0.6"))).timeout
 		await RenderingServer.frame_post_draw
@@ -370,6 +371,33 @@ func redeal(side: String) -> void:
 	_open_picker(side)
 
 
+## Call out what just happened, big, in the middle of the screen.
+func _announce(e: Dictionary, poss_before: int, score_before: Array) -> void:
+	var r: Dictionary = sim.result
+	var who: String = Team.NAMES[poss_before]
+	var other: String = Team.NAMES[1 - poss_before]
+	var st: Dictionary = r.get("stat", {})
+	var scored: int = game.score[0] + game.score[1] - score_before[0] - score_before[1]
+	if r.get("def_td", false):
+		hud.toast("PICK SIX!\n%s score" % other if r.get("turnover", "") == "int" else "SCOOP AND SCORE!\n%s score" % other, 2.4)
+	elif r.get("td", false) or scored >= 6:
+		hud.toast("TOUCHDOWN!\n%s" % who, 2.4)
+	elif r.get("safety", false):
+		hud.toast("SAFETY!\n2 points %s" % other, 2.2)
+	elif r.get("turnover", "") == "int":
+		hud.toast("INTERCEPTED!\nby %s · %s ball" % [String(r.get("carrier", "")), other], 2.2)
+	elif r.get("turnover", "") == "fumble":
+		hud.toast("FUMBLE!\nRecovered by %s · %s ball" % [String(st.get("fr_by", "the defense")), other], 2.2)
+	elif String(e.get("down_event", "")) == "downs":
+		hud.toast("TURNOVER ON DOWNS\n%s ball" % other, 2.2)
+	elif r.get("sack", false):
+		hud.toast("SACK!", 1.2)
+	elif String(e.get("down_event", "")) == "first_down":
+		hud.toast("FIRST DOWN!\n%s" % who, 1.4)
+	elif float(e.get("gain", 0.0)) >= 20.0:
+		hud.toast("BIG GAIN! +%d" % int(round(float(e["gain"]))), 1.4)
+
+
 func resume_after_break() -> void:
 	if _phase == "qbreak":
 		_next()
@@ -425,8 +453,10 @@ func _next() -> void:
 	if snap["kind"] != "play":
 		hud.show_call("")
 		hud.show_result(String(snap.get("text", "")))
-		if snap["kind"] == "fg" and bool(snap.get("good", false)):
-			hud.toast("FIELD GOAL")
+		if snap["kind"] == "fg":
+			hud.toast("FIELD GOAL IS GOOD!" if bool(snap.get("good", false)) else "NO GOOD!", 2.0)
+		elif snap["kind"] == "punt":
+			hud.toast("PUNT", 1.2)
 		_phase = "kick"
 		_wait = AFTER * 1.2
 		if poss_before != game.poss:
@@ -468,6 +498,7 @@ func _process(delta: float) -> void:
 			if _wait <= 0.0:
 				_phase = "live"
 				_acc = 0.0
+				hud.show_board(false)   # the scoreboard steps aside while the ball is live
 		"live":
 			_acc += minf(d, 10.0)
 			var guard := 0
@@ -485,12 +516,8 @@ func _process(delta: float) -> void:
 				var e := game.finish(sim)
 				hud.show_result(String(e["text"]))
 				hud.show_state(game)
-				if game.score[0] + game.score[1] - score_before[0] - score_before[1] >= 6:
-					hud.toast("TOUCHDOWN")
-				elif e.get("why", "") == "sack":
-					hud.toast("SACK", 1.0)
-				elif sim.result.get("turnover", "") != "":
-					hud.toast("TURNOVER")
+				_announce(e, poss_before, score_before)
+				hud.show_board(true)
 				if poss_before != game.poss:
 					_skip_drive = false
 				_phase = "after"

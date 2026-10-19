@@ -16,6 +16,8 @@ var _speed_btns := {}
 var _view_btn: Button
 var _overlay: Control = null
 var _toast: Label
+var _board: Control
+var _board_tw: Tween
 var _toast_t := 0.0
 var _progress: Label
 var fs := 15                 # base font size
@@ -62,6 +64,7 @@ func setup(m: Node) -> void:
 	_toast = Label.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_toast.add_theme_font_size_override("font_size", fs + 22)
 	_toast.add_theme_color_override("font_color", YELLOW)
 	_toast.add_theme_color_override("font_outline_color", MAGENTA)
@@ -137,6 +140,7 @@ func _button(text: String, cb: Callable, toggle := false) -> Button:
 
 func _build_scoreboard() -> void:
 	var top := PanelContainer.new()
+	_board = top
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	top.offset_left = 8
 	top.offset_right = -8
@@ -198,6 +202,16 @@ func show_state(g: Game) -> void:
 	_sit.text = "" if g.over else "%s ball · %s" % [g.teams[g.poss]["name"], g.situation()]
 
 
+## Fade the scoreboard out for the play and back in after the whistle.
+func show_board(on: bool) -> void:
+	if _board == null:
+		return
+	if _board_tw != null and _board_tw.is_valid():
+		_board_tw.kill()
+	_board_tw = create_tween()
+	_board_tw.tween_property(_board, "modulate:a", 1.0 if on else 0.0, 0.25)
+
+
 func show_call(text: String) -> void:
 	_call.text = text
 
@@ -208,6 +222,19 @@ func show_result(text: String) -> void:
 
 func toast(text: String, secs := 1.6) -> void:
 	_toast.text = text
+	# as big as fits: shrink the type until the longest line fits the screen with a margin
+	var avail := get_viewport().get_visible_rect().size.x - 28.0
+	var font := _toast.get_theme_font("font")
+	var size := fs + 22
+	while size > fs:
+		var widest := 0.0
+		for ln in text.split("\n"):
+			widest = maxf(widest, font.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+		if widest + 24.0 <= avail:
+			break
+		size -= 2
+	_toast.add_theme_font_size_override("font_size", size)
+	_toast.reset_size()
 	_toast.visible = true
 	_toast.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - _toast.size.x * 0.5, get_viewport().get_visible_rect().size.y * 0.42)
 	_toast_t = secs

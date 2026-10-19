@@ -33,6 +33,7 @@ var drive := {}                # the current drive: team, start, plays, yards
 var drives: Array = []
 var pending := {}              # the call for the snap in play
 var plays_run := 0
+var down_event := ""           # what the last snap did to the downs: "first_down", "downs" (turned over), ""
 var line := [[0, 0, 0, 0], [0, 0, 0, 0]]   # points a quarter
 var pstats := [{}, {}]         # per team: slot -> player box score
 var quarter_ends: Array = []   # a snapshot at the end of each quarter: {q, score, line, stats, pstats}
@@ -390,6 +391,7 @@ func finish(sim: PlaySim) -> Dictionary:
 	var desc := _describe(sim, op, dp, gain)
 	var e := {"kind": "play", "team": team, "off": op.name, "def": dp.name, "gain": gain, "why": r["why"], "text": desc,
 		"down": was_down, "to_go": was_to_go, "yl": yl}
+	down_event = ""
 	_player_stats(sim, team, gain)
 	if pending.get("off_text", "") != "":
 		e["off_text"] = pending["off_text"]
@@ -456,6 +458,7 @@ func finish(sim: PlaySim) -> Dictionary:
 		var stops: bool = r["clock_stops"]
 		_tick(elapsed + (0.0 if stops else _runoff(team)), stops)
 	last_gain[team] = gain
+	e["down_event"] = down_event
 	_log_play(e)
 	return e
 
@@ -478,12 +481,14 @@ func _advance_down(gain: float) -> void:
 		if down == 4:
 			st["fourth_conv"] = int(st["fourth_conv"]) + 1
 		st["first_downs"] = int(st["first_downs"]) + 1
+		down_event = "first_down"
 		down = 1
 		to_go = minf(10.0, 100.0 - yl)
 		return
 	to_go -= gain
 	down += 1
 	if down > 4:
+		down_event = "downs"
 		drive["result"] = "downs"
 		poss = 1 - poss
 		yl = 100.0 - yl
