@@ -65,6 +65,10 @@ func _ready() -> void:
 			calling[t] = String(args[key + "call"])
 	if args.has("redcall") or args.has("bluecall"):
 		new_game()
+	if args.has("swipetest"):
+		await get_tree().create_timer(3.0).timeout
+		_swipe_test()
+		return
 	if args.has("shot"):
 		# --shot=out.png --at=6 [--panel=teams|editor|log] : a screenshot for checking the look
 		var at := float(args.get("at", "6"))
@@ -518,3 +522,73 @@ func _batch_step() -> void:
 		hud.set_progress("")
 		var agg := Batch.aggregate(_batch_games)
 		hud.show_batch(agg, [coaches[0], coaches[1]])
+
+
+## Test hook: a finger on a play card that slides must scroll and not pick; a tap must pick.
+func _swipe_test() -> void:
+	var sc: DragScroll = null
+	var stack: Array = [hud]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is DragScroll:
+			sc = n
+		stack.append_array(n.get_children())
+	if sc == null:
+		print("SWIPE: no panel open")
+		get_tree().quit(1)
+		return
+	var card: Control = null
+	stack = [sc]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Button and (n as Button).custom_minimum_size.y > 60 and sc.get_global_rect().has_point((n as Control).get_global_rect().get_center() + Vector2(0, 60)):
+			card = n
+		stack.append_array(n.get_children())
+	var at := card.get_global_rect().get_center()
+	var send := func(ev: InputEvent) -> void:
+		Input.parse_input_event(ev)
+		await get_tree().process_frame
+	var down := func(p: Vector2, on: bool) -> InputEventMouseButton:
+		var e := InputEventMouseButton.new()
+		e.button_index = MOUSE_BUTTON_LEFT
+		e.pressed = on
+		e.position = p
+		e.global_position = p
+		if on:
+			e.button_mask = MOUSE_BUTTON_MASK_LEFT
+		return e
+	print("SWIPE: start, card at ", at)
+	var before := sc.scroll_vertical
+	await send.call(down.call(at, true))
+	for k in 12:
+		var m := InputEventMouseMotion.new()
+		m.position = at - Vector2(0, 25 * (k + 1))
+		m.global_position = m.position
+		m.relative = Vector2(0, -25)
+		m.button_mask = MOUSE_BUTTON_MASK_LEFT
+		await send.call(m)
+	await send.call(down.call(at - Vector2(0, 300), false))
+	for k in 10:
+		await get_tree().process_frame
+	if not is_instance_valid(sc):
+		print("SWIPE: FAILED - the slide picked a play")
+		get_tree().quit(1)
+		return
+	var bar := sc.get_v_scroll_bar()
+	print("SWIPE: scrolled %d -> %d (furthest it can go: %d), still picking: %s" % [before, sc.scroll_vertical, int(bar.max_value - bar.page), _phase == "picking"])
+	# now a tap on a card that is on screen
+	var target: Control = null
+	stack = [sc]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Button and (n as Button).custom_minimum_size.y > 60 and sc.get_global_rect().has_point((n as Control).get_global_rect().get_center()):
+			target = n
+			break
+		stack.append_array(n.get_children())
+	var c2 := target.get_global_rect().get_center()
+	await send.call(down.call(c2, true))
+	await send.call(down.call(c2, false))
+	for k in 5:
+		await get_tree().process_frame
+	print("TAP: picked: %s (phase now %s)" % [_phase != "picking", _phase])
+	get_tree().quit()
