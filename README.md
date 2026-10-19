@@ -1,4 +1,4 @@
-# Gridiron Bots — American football where the AI is the game
+# Gridiron Bots — robot football where the AI is the game
 
 **Play:** https://gridiron-bots.apps.precogsoftwareservices.com
 
@@ -48,6 +48,13 @@ lineup:
   QB "Pocket Passer"
   CB "Ball Hawk"
 ```
+
+## The look
+A neon robot-football arena: dark steel field with glowing lines and lit rails, arena walls with
+light panels, light towers, and armoured robots with visor lights in team colours (hot red vs
+electric blue) that stride as they run. The default **Arcade** camera looks down steeply from
+behind the offense and scrolls with the ball; Behind / Sideline / Overhead are still a tap away.
+Real football rules, 11 a side.
 
 ## In the app
 - **Teams** — a coach per side and a brain per position (or the coach's pick), game length.

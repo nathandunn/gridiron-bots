@@ -4,8 +4,8 @@ extends Node3D
 ## upright), Sideline (the TV shot) and Overhead (the coach's film). Drag to swing round,
 ## wheel or pinch to zoom; picking a view again puts it back.
 
-const VIEWS := ["Behind", "Sideline", "Overhead"]
-var view := "Behind"
+const VIEWS := ["Arcade", "Behind", "Sideline", "Overhead"]
+var view := "Arcade"
 var field: FieldView
 var zoom := 1.0
 var swing := 0.0
@@ -45,7 +45,14 @@ func _process(delta: float) -> void:
 	_focus = _focus.lerp(f, minf(delta * 3.0, 1.0))
 	var target := _focus
 	var eye := Vector3.ZERO
+	_cam.fov = 44.0 if view == "Arcade" else 55.0
 	match view:
+		"Arcade":
+			# the cabinet view: high and steep from behind the offense, scrolling with the ball
+			target += Vector3(0, 0, _dir * (7.0 if portrait_view() else 4.0))
+			target.x *= 0.6
+			var portrait2 := get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
+			eye = target + (Vector3(0, 46.0, -_dir * 24.0) if portrait2 else Vector3(0, 21.0, -_dir * 19.0)) * zoom
 		"Behind":
 			target += Vector3(0, 0, _dir * 10.0)
 			var portrait := get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
@@ -92,3 +99,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _pinch > 0.0:
 				zoom = clampf(zoom * _pinch / maxf(d, 1.0), 0.35, 2.5)
 			_pinch = d
+
+
+func portrait_view() -> bool:
+	var r := get_viewport().get_visible_rect().size
+	return r.y > r.x

@@ -257,24 +257,42 @@ func _build_ui() -> void:
 	_scale_for_phone()
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
+	# night in a neon arena
 	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.45, 0.62, 0.82)
+	e.background_color = Color(0.02, 0.025, 0.05)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.75, 0.78, 0.82)
-	e.ambient_light_energy = 0.7
+	e.ambient_light_color = Color(0.45, 0.5, 0.7)
+	e.ambient_light_energy = 0.55
+	e.glow_enabled = true
+	e.glow_intensity = 0.9
+	e.glow_strength = 1.1
+	e.glow_bloom = 0.08
+	e.glow_hdr_threshold = 0.9
+	e.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	e.fog_enabled = true
+	e.fog_light_color = Color(0.05, 0.07, 0.14)
+	e.fog_density = 0.004
 	env.environment = e
 	add_child(env)
+	# the light towers: a cool key light and a magenta rim
 	var sun := DirectionalLight3D.new()
-	sun.rotation = Vector3(-0.95, 0.5, 0)
-	sun.light_energy = 1.1
+	sun.rotation = Vector3(-1.05, 0.45, 0)
+	sun.light_energy = 0.9
+	sun.light_color = Color(0.85, 0.9, 1.0)
+	sun.shadow_enabled = true
 	add_child(sun)
+	var rim := DirectionalLight3D.new()
+	rim.rotation = Vector3(-0.6, PI + 0.6, 0)
+	rim.light_energy = 0.35
+	rim.light_color = Color(1.0, 0.35, 0.8)
+	add_child(rim)
 	view = FieldView.new()
 	add_child(view)
 	cam = BroadcastCam.new()
 	cam.field = view
 	add_child(cam)
 	var vp := get_viewport().get_visible_rect().size
-	cam.set_view("Behind" if vp.y > vp.x else "Sideline")
+	cam.set_view("Arcade")
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)

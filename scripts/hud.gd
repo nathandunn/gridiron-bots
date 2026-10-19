@@ -30,6 +30,9 @@ var _ed_names_box: HFlowContainer
 var _ed_words_box: HFlowContainer
 var _ed_example: Label
 
+const CYAN := Color(0.35, 0.95, 1.0)
+const MAGENTA := Color(1.0, 0.38, 0.8)
+const YELLOW := Color(1.0, 0.88, 0.3)
 const KIND_LABEL := {"coach": "Coaches", "play": "Plays", "ai": "Position brains"}
 const PLAY_HELP := """Assignments, one line per position (OL, WR, DL, LB, CB, S set the whole group):
 QB: pass drop 3|5|7 read WR1 WR2 ... · play action drop 7 read ... · handoff · run sneak
@@ -59,9 +62,10 @@ func setup(m: Node) -> void:
 	_toast = Label.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast.add_theme_font_size_override("font_size", fs + 10)
-	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
-	_toast.add_theme_constant_override("outline_size", 8)
+	_toast.add_theme_font_size_override("font_size", fs + 22)
+	_toast.add_theme_color_override("font_color", YELLOW)
+	_toast.add_theme_color_override("font_outline_color", MAGENTA)
+	_toast.add_theme_constant_override("outline_size", 12)
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast.visible = false
 	_root.add_child(_toast)
@@ -70,32 +74,43 @@ func setup(m: Node) -> void:
 func _make_theme() -> Theme:
 	var th := Theme.new()
 	th.default_font_size = fs
-	var mk := func(bg: Color, border: Color) -> StyleBoxFlat:
+	var mk := func(bg: Color, border: Color, glow := 0) -> StyleBoxFlat:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = bg
 		sb.border_color = border
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(7)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(4)
 		sb.content_margin_left = 10
 		sb.content_margin_right = 10
 		sb.content_margin_top = 5
 		sb.content_margin_bottom = 5
+		if glow > 0:
+			sb.shadow_color = Color(border, 0.45)
+			sb.shadow_size = glow
 		return sb
-	th.set_stylebox("normal", "Button", mk.call(Color(0.14, 0.16, 0.2, 0.92), Color(0.55, 0.58, 0.62)))
-	th.set_stylebox("hover", "Button", mk.call(Color(0.22, 0.25, 0.3, 0.95), Color(0.85, 0.85, 0.85)))
-	th.set_stylebox("pressed", "Button", mk.call(Color(0.93, 0.8, 0.3), Color(1, 0.95, 0.7)))
-	th.set_stylebox("hover_pressed", "Button", mk.call(Color(0.97, 0.85, 0.4), Color(1, 0.95, 0.7)))
-	th.set_stylebox("disabled", "Button", mk.call(Color(0.1, 0.11, 0.13, 0.8), Color(0.3, 0.3, 0.3)))
+	th.set_stylebox("normal", "Button", mk.call(Color(0.03, 0.05, 0.09, 0.92), Color(0.2, 0.75, 0.9, 0.85)))
+	th.set_stylebox("hover", "Button", mk.call(Color(0.05, 0.1, 0.16, 0.95), CYAN, 4))
+	th.set_stylebox("pressed", "Button", mk.call(Color(0.85, 0.2, 0.62), MAGENTA, 6))
+	th.set_stylebox("hover_pressed", "Button", mk.call(Color(0.95, 0.28, 0.7), MAGENTA, 6))
+	th.set_stylebox("disabled", "Button", mk.call(Color(0.04, 0.05, 0.07, 0.8), Color(0.25, 0.28, 0.32)))
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	th.set_color("font_pressed_color", "Button", Color(0.08, 0.07, 0.03))
-	th.set_color("font_hover_pressed_color", "Button", Color(0.08, 0.07, 0.03))
+	th.set_color("font_color", "Button", Color(0.85, 0.97, 1.0))
+	th.set_color("font_hover_color", "Button", Color.WHITE)
+	th.set_color("font_pressed_color", "Button", Color.WHITE)
+	th.set_color("font_hover_pressed_color", "Button", Color.WHITE)
 	var panel := StyleBoxFlat.new()
-	panel.bg_color = Color(0.07, 0.08, 0.1, 0.96)
-	panel.border_color = Color(0.45, 0.48, 0.52)
-	panel.set_border_width_all(1)
-	panel.set_corner_radius_all(10)
+	panel.bg_color = Color(0.02, 0.03, 0.06, 0.96)
+	panel.border_color = MAGENTA
+	panel.set_border_width_all(2)
+	panel.set_corner_radius_all(6)
 	panel.set_content_margin_all(12)
+	panel.shadow_color = Color(1.0, 0.3, 0.75, 0.35)
+	panel.shadow_size = 10
 	th.set_stylebox("panel", "PanelContainer", panel)
+	for cls in ["OptionButton"]:
+		th.set_stylebox("normal", cls, mk.call(Color(0.03, 0.05, 0.09, 0.92), Color(0.2, 0.75, 0.9, 0.85)))
+		th.set_stylebox("hover", cls, mk.call(Color(0.05, 0.1, 0.16, 0.95), CYAN, 4))
+		th.set_stylebox("pressed", cls, mk.call(Color(0.05, 0.1, 0.16, 0.95), MAGENTA, 4))
 	return th
 
 
@@ -127,9 +142,13 @@ func _build_scoreboard() -> void:
 	top.offset_right = -8
 	top.offset_top = 46
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.06, 0.08, 0.78)
-	sb.set_corner_radius_all(9)
+	sb.bg_color = Color(0.01, 0.02, 0.04, 0.82)
+	sb.border_color = CYAN
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(4)
 	sb.set_content_margin_all(8)
+	sb.shadow_color = Color(0.3, 0.9, 1.0, 0.3)
+	sb.shadow_size = 8
 	top.add_theme_stylebox_override("panel", sb)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(top)
@@ -140,19 +159,21 @@ func _build_scoreboard() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(row)
 	for t in 2:
-		var l := _label("", fs + 6, FieldView.COLORS[t].lightened(0.35))
+		var l := _label("", fs + 6, FieldView.NEON[t].lightened(0.25))
+		l.add_theme_color_override("font_outline_color", Color(FieldView.NEON[t], 0.5))
+		l.add_theme_constant_override("outline_size", 4)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if t == 0 else HORIZONTAL_ALIGNMENT_RIGHT
 		_score[t] = l
 		if t == 1:
-			_clock = _label("", fs + 2)
+			_clock = _label("", fs + 3, YELLOW)
 			_clock.autowrap_mode = TextServer.AUTOWRAP_OFF
 			_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			row.add_child(_clock)
 		row.add_child(l)
 	row.move_child(_score[0], 0)
-	_sit = _label("", fs, Color(1, 0.9, 0.55))
+	_sit = _label("", fs, Color(0.85, 0.97, 1.0))
 	_sit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_sit)
 	_call = _label("", fs - 2, Color(0.8, 0.85, 0.9))
@@ -281,7 +302,7 @@ func _open(title: String) -> VBoxContainer:
 	pc.add_child(outer)
 	var head := HBoxContainer.new()
 	outer.add_child(head)
-	var tl := _label(title, fs + 4, Color(1, 0.9, 0.55))
+	var tl := _label(title, fs + 4, MAGENTA)
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(tl)
 	head.add_child(_button("✕ Close", func(): close_overlay()))
@@ -298,7 +319,7 @@ func _open(title: String) -> VBoxContainer:
 
 
 func _section(box: Control, text: String) -> void:
-	var l := _label(text, fs + 1, Color(1, 0.85, 0.45))
+	var l := _label(text, fs + 1, CYAN)
 	box.add_child(l)
 
 
@@ -684,7 +705,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.add_child(d)
 		d.setup(p)
-		var nl := _label(p.name.replace("Gen ", ""), fs - 2, Color(1, 0.92, 0.6))
+		var nl := _label(p.name.replace("Gen ", ""), fs - 2, YELLOW)
 		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		nl.clip_text = true
@@ -707,7 +728,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 		row.add_child(_button("Punt", func(): main.pick_made("kick", "punt")))
 		if g.fg_range():
 			row.add_child(_button("Field goal (%d yd)" % int(round(100.0 - g.yl + 17.0)), func(): main.pick_made("kick", "field_goal")))
-	box.add_child(_label("Yellow is the run, blue the line of scrimmage. Defense: shaded zones, dashed lines for man, red arrows for blitzers.", fs - 3, Color(0.7, 0.74, 0.78)))
+	box.add_child(_label("Yellow is the run, the blue line is the line of scrimmage. Defense: shaded zones, dashed lines for man coverage, pink arrows for blitzers.", fs - 3, Color(0.7, 0.74, 0.78)))
 
 
 func _play_subline(p: Play) -> String:
@@ -747,7 +768,7 @@ func show_stats(g: Game, mode: String, snap: Dictionary = {}) -> void:
 	var box := _open(title)
 	if mode == "final":
 		var w := g.winner()
-		box.add_child(_label("Tie game" if w < 0 else "%s win" % names[w], fs + 3, Color(1, 0.9, 0.55)))
+		box.add_child(_label("Tie game" if w < 0 else "%s win" % names[w], fs + 3, MAGENTA))
 	_line_score(box, names, line, score)
 	var tabs := HFlowContainer.new()
 	tabs.add_theme_constant_override("h_separation", 6)
@@ -784,7 +805,7 @@ func _line_score(box: Control, names: Array, line: Array, score: Array) -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	box.add_child(grid)
 	for h in ["", "1", "2", "3", "4", "T"]:
-		var l := _label(h, fs - 1, Color(1, 0.85, 0.45))
+		var l := _label(h, fs - 1, CYAN)
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		grid.add_child(l)
@@ -837,7 +858,7 @@ func _player_tables(box: Control, ps: Dictionary, per: int, team: Dictionary) ->
 		var hl := _label("", fs - 2)
 		grid.add_child(hl)
 		for h in tb[1]:
-			var l := _label(h, fs - 2, Color(1, 0.85, 0.45))
+			var l := _label(h, fs - 2, CYAN)
 			l.autowrap_mode = TextServer.AUTOWRAP_OFF
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			grid.add_child(l)
@@ -900,7 +921,7 @@ func _box_score(box: Control, stats: Array, per: Array, names: Array) -> void:
 	rows.remove_at(1)
 	for r in rows:
 		for i in 3:
-			var l := _label(String(r[i]), fs - 1, Color(1, 0.85, 0.45) if i == 0 or r == rows[0] else Color(0.93, 0.93, 0.9))
+			var l := _label(String(r[i]), fs - 1, CYAN if i == 0 or r == rows[0] else Color(0.93, 0.93, 0.9))
 			l.autowrap_mode = TextServer.AUTOWRAP_OFF
 			g.add_child(l)
 
@@ -963,7 +984,7 @@ func show_batch(agg: Dictionary, names: Array) -> void:
 	for t in 2:
 		for q in 4:
 			avg_line[t].append(snappedf(float(agg["line"][t][q]) / n, 0.1))
-	box.add_child(_label("Points a quarter", fs - 1, Color(1, 0.85, 0.45)))
+	box.add_child(_label("Points a quarter", fs - 1, CYAN))
 	_line_score(box, names, avg_line, [snappedf(float(agg["points"][0]) / n, 0.1), snappedf(float(agg["points"][1]) / n, 0.1)])
 	var tabs := HFlowContainer.new()
 	tabs.add_theme_constant_override("h_separation", 6)

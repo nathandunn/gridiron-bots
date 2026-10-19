@@ -7,11 +7,11 @@ extends Control
 const VIEW_X := 24.0       # yards either side of the ball
 const VIEW_UP := 18.0      # yards downfield shown
 const VIEW_BACK := 8.0     # yards behind the line shown
-const CHALK := Color(0.95, 0.95, 0.92)
-const FAINT := Color(0.95, 0.95, 0.92, 0.28)
-const RUN := Color(1.0, 0.85, 0.35)
+const CHALK := Color(0.45, 0.95, 1.0)
+const FAINT := Color(0.45, 0.95, 1.0, 0.3)
+const RUN := Color(1.0, 0.88, 0.3)
 const ZONE := Color(0.45, 0.75, 1.0, 0.28)
-const RUSH := Color(1.0, 0.5, 0.45)
+const RUSH := Color(1.0, 0.38, 0.8)
 
 var play: Play
 var _off: Array = []       # [{slot, pos, kind, route, gap}]
@@ -88,9 +88,11 @@ func _draw() -> void:
 	if play == null:
 		return
 	# grass and the line of scrimmage
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.13, 0.32, 0.16))
-	for yd in [5.0, 10.0, 15.0]:
-		draw_line(_to(Vector2(-VIEW_X, yd)), _to(Vector2(VIEW_X, yd)), Color(1, 1, 1, 0.08), 1.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.05, 0.1))
+	for yd in [-5.0, 5.0, 10.0, 15.0]:
+		draw_line(_to(Vector2(-VIEW_X, yd)), _to(Vector2(VIEW_X, yd)), Color(0.4, 0.9, 1.0, 0.1), 1.0)
+	for xd in [-16.0, -8.0, 0.0, 8.0, 16.0]:
+		draw_line(_to(Vector2(xd, -VIEW_BACK)), _to(Vector2(xd, VIEW_UP)), Color(0.4, 0.9, 1.0, 0.05), 1.0)
 	draw_line(_to(Vector2(-VIEW_X, 0)), _to(Vector2(VIEW_X, 0)), Color(0.4, 0.65, 1.0, 0.7), 1.5)
 	var r := maxf(size.x / 70.0, 3.2)
 	if play.side == "offense":
