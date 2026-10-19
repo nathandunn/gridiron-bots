@@ -45,14 +45,14 @@ func _process(delta: float) -> void:
 	_focus = _focus.lerp(f, minf(delta * 3.0, 1.0))
 	var target := _focus
 	var eye := Vector3.ZERO
-	_cam.fov = 44.0 if view == "Arcade" else 55.0
+	_cam.fov = 40.0 if view == "Arcade" else 55.0
 	match view:
 		"Arcade":
-			# the cabinet view: high and steep from behind the offense, scrolling with the ball
-			target += Vector3(0, 0, _dir * (7.0 if portrait_view() else 4.0))
-			target.x *= 0.6
-			var portrait2 := get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
-			eye = target + (Vector3(0, 46.0, -_dir * 24.0) if portrait2 else Vector3(0, 21.0, -_dir * 19.0)) * zoom
+			# the cabinet view: always the same picture - sideline to sideline, a fixed stretch
+			# of field around the ball - from the same steep angle, on any screen shape. The
+			# camera backs off until that whole box fits between the scoreboard and the buttons.
+			target = Vector3(0, 0, _focus.z + _dir * ARCADE_AHEAD)
+			eye = target + _arcade_offset()
 		"Behind":
 			target += Vector3(0, 0, _dir * 10.0)
 			var portrait := get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
@@ -66,7 +66,10 @@ func _process(delta: float) -> void:
 	var off := eye - target
 	off = off.rotated(Vector3.UP, swing)
 	var want := target + off
-	_cam.global_position = _cam.global_position.lerp(want, minf(delta * 4.0, 1.0)) if _cam.global_position != Vector3.ZERO else want
+	if view == "Arcade":
+		_cam.global_position = want   # the fitted distance is exact; the focus itself is smoothed
+	else:
+		_cam.global_position = _cam.global_position.lerp(want, minf(delta * 4.0, 1.0)) if _cam.global_position != Vector3.ZERO else want
 	_cam.look_at(target, Vector3.UP if view != "Overhead" else Vector3(0, 0, _dir))
 
 
@@ -99,6 +102,49 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _pinch > 0.0:
 				zoom = clampf(zoom * _pinch / maxf(d, 1.0), 0.35, 2.5)
 			_pinch = d
+
+
+## The Arcade box: the full width of the field (plus the rails) and BACK yards behind to AHEAD
+## yards in front of the ball; the screen space kept clear for the scoreboard and the buttons.
+const ARCADE_PITCH := 0.95        # radians below the horizon
+const ARCADE_BACK := 12.0
+const ARCADE_FRONT := 26.0
+const ARCADE_AHEAD := 7.0         # the box is centred this far ahead of the ball
+const ARCADE_TOP := 0.2           # fraction of the screen height the scoreboard covers
+const ARCADE_BOTTOM := 0.12       # and the buttons
+
+
+func _arcade_offset() -> Vector3:
+	var back := Vector3(0, sin(ARCADE_PITCH), -_dir * cos(ARCADE_PITCH))   # unit vector from target to eye
+	var centre := Vector3(0, 0, _focus.z + _dir * ARCADE_AHEAD)
+	var hw := FieldView.HALF_W + 1.5
+	var z0 := _focus.z - _dir * ARCADE_BACK
+	var z1 := _focus.z + _dir * ARCADE_FRONT
+	var corners := [Vector3(-hw, 0, z0), Vector3(hw, 0, z0), Vector3(-hw, 0, z1), Vector3(hw, 0, z1),
+		Vector3(-hw, 2.5, z0), Vector3(hw, 2.5, z0), Vector3(-hw, 2.5, z1), Vector3(hw, 2.5, z1)]
+	var vp := get_viewport().get_visible_rect().size
+	var keep := _cam.global_transform
+	var lo := 8.0
+	var hi := 400.0
+	for _i in 18:
+		var d := (lo + hi) * 0.5
+		var eye := centre + back * d
+		_cam.global_transform = Transform3D(Basis.IDENTITY, eye).looking_at(centre, Vector3.UP)
+		var fits := true
+		for c in corners:
+			if _cam.is_position_behind(c):
+				fits = false
+				break
+			var sp := _cam.unproject_position(c)
+			if sp.x < 4.0 or sp.x > vp.x - 4.0 or sp.y < vp.y * ARCADE_TOP or sp.y > vp.y * (1.0 - ARCADE_BOTTOM):
+				fits = false
+				break
+		if fits:
+			hi = d
+		else:
+			lo = d
+	_cam.global_transform = keep
+	return back * hi * zoom
 
 
 func portrait_view() -> bool:
