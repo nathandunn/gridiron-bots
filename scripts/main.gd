@@ -596,6 +596,8 @@ func _process(delta: float) -> void:
 				sfx.play("whistle", -10.0)
 				_announce(e, poss_before, score_before)
 				hud.show_board(true)
+				if randf() < 0.3:
+					view.babble_now()
 				if poss_before != game.poss:
 					_skip_drive = false
 				_phase = "after"

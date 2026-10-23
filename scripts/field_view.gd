@@ -590,6 +590,12 @@ func _trash(who: String, p: PlaySim.P, chance: float) -> void:
 			return   # one talker at a time is plenty
 	var lines: Array = TRASH[who]
 	var line: String = lines[randi() % lines.size()]
+	if randf() < 0.4:
+		line = babble()   # sometimes the circuits just say whatever comes out
+	_say_line(p, line)
+
+
+func _say_line(p: PlaySim.P, line: String) -> void:
 	var lab := Label3D.new()
 	lab.text = "“%s”" % line
 	lab.font_size = 60
@@ -788,3 +794,65 @@ func _pose(p: PlaySim.P, e: Dictionary, swing: float, delta: float) -> void:
 	var legs: Array = e["legs"]
 	(legs[0] as Node3D).rotation.x = swing + leg_kick
 	(legs[1] as Node3D).rotation.x = -swing + leg_kick
+
+
+
+## ---- robot babble: nonsense sentences out of random words --------------------------------------
+
+const BAB_ADJ := ["rusty", "turbo", "quantum", "greasy", "binary", "chrome", "soggy", "electric", "wobbly",
+	"magnetic", "crunchy", "glitchy", "nuclear", "squeaky", "hydraulic", "moist", "laser", "obsolete", "fuzzy", "titanium"]
+const BAB_NOUN := ["toaster", "sprocket", "firmware", "gravy", "capacitor", "hubcap", "waffle iron", "flux valve",
+	"cheese grater", "motherboard", "lug nut", "spatula", "dial tone", "carburetor", "teapot", "gearbox",
+	"floppy disk", "pancake", "fax machine", "bolt", "sandwich", "transistor", "vacuum", "doorknob"]
+const BAB_VERB := ["defragment", "lubricate", "microwave", "reboot", "calibrate", "vaporize", "sprinkle",
+	"download", "polish", "compress", "magnetize", "unscrew", "toast", "overclock", "recycle", "buffer"]
+const BAB_EXCL := ["BEEP BOOP", "ERROR", "WHIRRR", "BZZT", "AFFIRMATIVE", "CLANK", "DING", "KZZZT", "BLORP", "SYSTEM OK"]
+const BAB_FORMS := [
+	"{E}! I will {v} your {a} {n}!",
+	"My {n} is {a} and your {n2} is {a2}.",
+	"{E}. {V} the {n}. {V2} the {n2}.",
+	"You smell like a {a} {n}.",
+	"Error: {a} {n} not found. {E}.",
+	"Mother always said: never {v} a {a} {n}.",
+	"I am {pct} percent {n}.",
+	"Warning: {pct} {ns} detected in the {a} zone.",
+	"{E}. Please insert {pct} {ns}.",
+	"Do not {v} me, you {a} {n}!",
+	"{E}! {E2}! Who left this {n} in my {n2}?",
+	"Today I {v} the {n}. Tomorrow, the {a} {n2}.",
+	"Initiating {a} {n} protocol.",
+	"Your {n} has been {v}ed. {E}.",
+]
+
+
+static func babble() -> String:
+	var f: String = BAB_FORMS[randi() % BAB_FORMS.size()]
+	var pick := func(a: Array) -> String: return a[randi() % a.size()]
+	var v: String = pick.call(BAB_VERB)
+	var v2: String = pick.call(BAB_VERB)
+	f = f.replace("{E2}", pick.call(BAB_EXCL)).replace("{E}", pick.call(BAB_EXCL))
+	f = f.replace("{V2}", v2.capitalize()).replace("{V}", v.capitalize())
+	f = f.replace("{v}ed", (v.trim_suffix("e") + "ed")).replace("{v}", v)
+	f = f.replace("{a2}", pick.call(BAB_ADJ)).replace("{a}", pick.call(BAB_ADJ))
+	f = f.replace("{n2}", pick.call(BAB_NOUN)).replace("{n}", pick.call(BAB_NOUN))
+	f = f.replace("{pct}", str(randi_range(3, 99)))
+	var pl: String = pick.call(BAB_NOUN)
+	if pl.ends_with("x") or pl.ends_with("s") or pl.ends_with("ch") or pl.ends_with("sh"):
+		pl += "es"
+	elif pl.ends_with("y") and not pl.ends_with("ey"):
+		pl = pl.trim_suffix("y") + "ies"
+	else:
+		pl += "s"
+	f = f.replace("{ns}", pl)
+	return f
+
+
+## A random robot on the field says something that makes no sense (unless someone else is talking).
+func babble_now() -> void:
+	if sim == null or not talk:
+		return
+	for n in _fx_nodes:
+		if n["kind"] == "talk":
+			return
+	var p: PlaySim.P = sim.players[randi() % sim.players.size()]
+	_say_line(p, babble())
