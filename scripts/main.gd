@@ -78,6 +78,8 @@ func _ready() -> void:
 		var at := float(args.get("at", "6"))
 		if args.has("view"):
 			cam.set_view(String(args["view"]))
+		if args.has("speed"):
+			set_speed(float(args["speed"]))
 		await get_tree().create_timer(at).timeout
 		if args.has("on"):
 			var kinds := String(args["on"]).split(",")
@@ -87,6 +89,8 @@ func _ready() -> void:
 			while not hit[0] and waited < 240.0:
 				await get_tree().process_frame
 				waited += get_process_delta_time()
+			if args.has("speed"):
+				set_speed(1.0)
 		match String(args.get("panel", "")):
 			"teams": hud.open_teams()
 			"editor": hud.open_editor("ai", String(args.get("name", "")))
@@ -265,6 +269,7 @@ func _clock(c: float) -> String:
 
 const PRESNAP := 0.9
 const AFTER := 1.4
+const CELEBRATE := 4.0      # seconds of end-zone dancing after a score
 var _wait := 0.0
 var _skip_drive := false
 var _batch_team := -1
@@ -415,11 +420,15 @@ func _announce(e: Dictionary, poss_before: int, score_before: Array) -> void:
 		hud.toast("FIRST DOWN!\n%s" % who, 1.4)
 	elif float(e.get("gain", 0.0)) >= 20.0:
 		hud.toast("BIG GAIN! +%d" % int(round(float(e["gain"]))), 1.4)
-	_call_result(e, r, who, other, scored)
+	var scorer_team := -1
+	for t in 2:
+		if game.score[t] > int(score_before[t]):
+			scorer_team = t
+	_call_result(e, r, who, other, scored, scorer_team)
 
 
 ## The announcer's last word on the play, and the crowd.
-func _call_result(e: Dictionary, r: Dictionary, who: String, other: String, scored: int) -> void:
+func _call_result(e: Dictionary, r: Dictionary, who: String, other: String, scored: int, poss_scored := -1) -> void:
 	if _skip_drive:
 		return
 	var gain := int(round(float(e.get("gain", 0.0))))
@@ -445,13 +454,13 @@ func _call_result(e: Dictionary, r: Dictionary, who: String, other: String, scor
 			line += " First down, %s!" % who
 			big = true
 	announcer.result(line, big)
-	if r.get("td", false) or r.get("def_td", false) or scored >= 6:
+	if scored >= 6:
+		# the scorers dance in the end zone while the other side cries
 		sfx.play("roar", -2.0)
-		var slot := String(r.get("carrier", ""))
-		for p in sim.players:
-			if p.slot == slot and (p == sim.carrier or sim.carrier == null):
-				view.touchdown(p)
-				break
+		var spot: Vector2 = sim.carrier.pos if sim.carrier != null else sim.ball_pos
+		var scorers: int = poss_scored if poss_scored >= 0 else game.poss
+		view.celebrate(scorers, spot)
+		_wait = CELEBRATE
 	elif big or gain >= 12:
 		sfx.play("roar", -9.0)
 
@@ -601,7 +610,7 @@ func _process(delta: float) -> void:
 				if poss_before != game.poss:
 					_skip_drive = false
 				_phase = "after"
-				_wait = AFTER
+				_wait = maxf(_wait, AFTER) if _wait > AFTER else AFTER
 		"after", "kick":
 			_wait -= d
 			if _wait <= 0.0:

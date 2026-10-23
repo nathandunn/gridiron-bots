@@ -30,6 +30,7 @@ var alpha := 1.0             # how far between the last two steps
 var _t := 0.0
 var _pulse: Array = []       # emissive materials that breathe
 var _seen := 0               # sim.actions already acted out
+var _celeb := {}             # a score being celebrated: {team, spot, t0, pos: {idx: Vector2}}
 var _ball_fx := {}           # a loose or dead ball bouncing: {p0, p1, t0, hop}
 var _fx_nodes: Array = []    # popups, sparks, speech: {node, t0, life, kind, ...}
 var _spark_mat: Dictionary = {}
@@ -234,6 +235,7 @@ func set_play(s: PlaySim, possession: int, yard_line: float, to_go: float) -> vo
 	_cur.clear()
 	_seen = 0
 	_ball_fx = {}
+	_celeb = {}
 	for n in _fx_nodes:
 		(n["node"] as Node3D).queue_free()
 	_fx_nodes.clear()
@@ -355,6 +357,9 @@ func _process(delta: float) -> void:
 		var b: Vector2 = _cur.get(p.idx, p.pos)
 		var pos := a.lerp(b, clampf(alpha, 0.0, 1.0))
 		var root: Node3D = e["root"]
+		if not _celeb.is_empty():
+			_celebrate_one(p, e, delta)
+			continue
 		root.position = world(pos)
 		var f: Vector2 = p.face
 		if p.vel.length() > 0.4:
@@ -856,3 +861,145 @@ func babble_now() -> void:
 			return
 	var p: PlaySim.P = sim.players[randi() % sim.players.size()]
 	_say_line(p, babble())
+
+
+
+## ---- the touchdown dance (and the other side crying) ---------------------------------------------
+
+const DANCES := ["robot", "spin", "pump", "floss", "jump", "sprinkler"]
+const SOBS := ["WAAAH!", "*sad beeping*", "Not again...", "My circuits hurt.", "Boo hoo hoo.", "I want my mom(board).",
+	"Leaking coolant from my eyes.", "This is so unfair!", "*sniff* *bzzt*"]
+
+
+## The team that scored runs to the scorer in the end zone and dances; the other team cries.
+func celebrate(team: int, spot: Vector2) -> void:
+	if sim == null:
+		return
+	var pos := {}
+	for p in sim.players:
+		pos[p.idx] = _cur.get(p.idx, p.pos)
+		var e: Dictionary = _players.get(p.idx, {})
+		if not e.is_empty():
+			e["anim"] = ""
+	_celeb = {"team": team, "spot": spot, "t0": _t, "pos": pos, "next_tear": 0.0}
+	_sparks(world(spot, 2.5), 28, Color(1.0, 0.85, 0.2))
+	moment.emit({"kind": "celebrate", "a": -1, "b": -1, "t": sim.t, "pos": spot})
+	# one of the losers says how he feels
+	var losers: Array = []
+	for p in sim.players:
+		if p.team != team:
+			losers.append(p)
+	if not losers.is_empty() and talk:
+		_say_line(losers[randi() % losers.size()], SOBS[randi() % SOBS.size()])
+
+
+func _celebrate_one(p: PlaySim.P, e: Dictionary, delta: float) -> void:
+	var root: Node3D = e["root"]
+	var age := _t - float(_celeb["t0"])
+	var cur: Vector2 = _celeb["pos"][p.idx]
+	var spot: Vector2 = _celeb["spot"]
+	var arm := [0.0, 0.0]
+	var pitch := 0.0
+	var roll := 0.0
+	var hop := 0.0
+	var legs := [0.0, 0.0]
+	var yaw := root.rotation.y
+	if p.team == int(_celeb["team"]):
+		# gather round the scorer, then dance
+		var ring: int = p.idx % 11
+		var target := spot
+		if p != sim.carrier:
+			var ang := TAU * float(ring) / 11.0
+			target = spot + Vector2(cos(ang), sin(ang)) * (2.2 + 0.6 * float(ring % 3))
+		var to := target - cur
+		var moving := to.length() > 0.3
+		if moving:
+			cur += to.normalized() * minf(to.length(), maxf(8.0, to.length() * 2.2) * delta)
+			_celeb["pos"][p.idx] = cur
+			var fw := world(cur + to.normalized()) - world(cur)
+			yaw = atan2(fw.x, fw.z)
+			e["stride"] = float(e["stride"]) + delta * 11.0
+			var sw := sin(float(e["stride"])) * 0.7
+			legs = [sw, -sw]
+			arm = [-sw * 0.8, sw * 0.8]
+		else:
+			var ph := age * TAU * 1.6 + float(p.idx)
+			match DANCES[p.idx % DANCES.size()] if p != sim.carrier else "spike":
+				"robot":
+					var step := floorf(age * 3.2)
+					arm = [-1.57 + 0.6 * fmod(step, 2.0), -1.57 - 0.6 * fmod(step + 1.0, 2.0)]
+					yaw += (0.6 if fmod(step, 4.0) < 2.0 else -0.6) * delta * 4.0
+					hop = 0.08 * fmod(step, 2.0)
+				"spin":
+					yaw += delta * 9.0
+					arm = [-1.6, -1.6]
+					hop = absf(sin(ph)) * 0.2
+				"pump":
+					arm = [-3.0 + 0.5 * sin(ph * 2.0), -3.0 - 0.5 * sin(ph * 2.0)]
+					hop = absf(sin(ph)) * 0.35
+				"floss":
+					roll = sin(ph) * 0.35
+					arm = [-0.4 + 0.9 * sin(ph), -0.4 - 0.9 * sin(ph)]
+				"jump":
+					hop = absf(sin(ph * 0.8)) * 0.8
+					arm = [-2.9, -2.9]
+					legs = [0.4 * absf(sin(ph * 0.8)), -0.4 * absf(sin(ph * 0.8))]
+				"sprinkler":
+					arm = [-1.6, -2.6]
+					yaw += (sin(ph * 0.5) * 2.2) * delta
+					legs = [0.3 * sin(ph), 0.3 * sin(ph)]
+				"spike":
+					var j := fmod(age, 0.5) / 0.5
+					hop = sin(j * PI) * 0.6
+					arm = [-3.0, -3.0]
+					yaw += delta * 2.0
+	else:
+		# heads down, hands to the face, shoulders shaking; some go to a knee
+		var sob := sin(age * 28.0 + float(p.idx))
+		pitch = 0.35 + 0.04 * sob
+		roll = 0.05 * sob
+		arm = [-2.45 + 0.08 * sob, -2.45 - 0.08 * sob]
+		if p.idx % 3 == 0:
+			hop = -0.35
+			legs = [-1.2, 0.2]
+	root.position = world(cur)
+	root.rotation.y = yaw
+	var k := minf(delta * 16.0, 1.0)
+	e["tilt"] = lerpf(float(e["tilt"]), pitch, k)
+	e["roll"] = lerpf(float(e["roll"]), roll, k)
+	e["hop"] = lerpf(float(e["hop"]), hop, k)
+	var ca: Array = e["arm"]
+	ca[0] = lerpf(float(ca[0]), float(arm[0]), k)
+	ca[1] = lerpf(float(ca[1]), float(arm[1]), k)
+	root.rotation.x = float(e["tilt"])
+	root.rotation.z = float(e["roll"])
+	(e["body"] as Node3D).position = Vector3(0, float(e["hop"]), 0)
+	(e["arms"][0] as Node3D).rotation.x = float(ca[0])
+	(e["arms"][1] as Node3D).rotation.x = float(ca[1])
+	(e["legs"][0] as Node3D).rotation.x = float(legs[0])
+	(e["legs"][1] as Node3D).rotation.x = float(legs[1])
+	# tears: blue drops from the visor of every few criers
+	if p.team != int(_celeb["team"]) and p.idx % 2 == 0 and randf() < delta * 5.0:
+		_tear(world(cur, 1.95 + float(e["hop"])), yaw)
+
+
+func _tear(at: Vector3, yaw: float) -> void:
+	var c := Color(0.35, 0.7, 1.0)
+	if not _spark_mat.has(c):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = c
+		m.emission_enabled = true
+		m.emission = c
+		m.emission_energy_multiplier = 3.0
+		_spark_mat[c] = m
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.07, 0.11, 0.07)
+	mi.mesh = bm
+	mi.material_override = _spark_mat[c]
+	var side := 0.1 if randf() < 0.5 else -0.1
+	mi.position = at + Vector3(sin(yaw) * 0.25 + cos(yaw) * side, 0, cos(yaw) * 0.25 - sin(yaw) * side)
+	add_child(mi)
+	var v := Vector3(sin(yaw), 0, cos(yaw)) * 0.8 + Vector3(0, 0.6, 0)
+	_fx_nodes.append({"node": mi, "t0": _t, "life": 0.7, "kind": "spark", "vel": v})
