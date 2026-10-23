@@ -471,7 +471,7 @@ func next_sound() -> String:
 	announcer.voice = sound_mode == 0
 	if sound_mode != 0:
 		announcer.stop()
-	return ["🔊 Voice", "🔉 Sound", "🔇 Muted"][sound_mode]
+	return ["Sound: voice", "Sound: on", "Sound: off"][sound_mode]
 
 
 func resume_after_break() -> void:

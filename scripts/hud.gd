@@ -201,7 +201,7 @@ func _build_scoreboard() -> void:
 
 func show_state(g: Game) -> void:
 	for t in 2:
-		var ball := " 🏈" if g.poss == t and not g.over else ""
+		var ball := " «" if g.poss == t and not g.over else ""
 		var cn: String = (g.teams[t]["coach"] as Coach).name
 		_score[t].text = ("%s %d%s" % [cn, g.score[t], ball]) if t == 0 else ("%s%s %d" % [ball, cn, g.score[t]])
 	var s := maxi(int(g.clock), 0)
@@ -338,16 +338,16 @@ func _build_controls() -> void:
 	bar.add_theme_constant_override("h_separation", 6)
 	bar.add_theme_constant_override("v_separation", 6)
 	_root.add_child(bar)
-	_pause_btn = _button("⏸", func(): main.toggle_pause())
+	_pause_btn = _button("Pause", func(): main.toggle_pause())
 	bar.add_child(_pause_btn)
 	for s in [1.0, 2.0, 4.0, 8.0]:
 		var b := _button("%d×" % int(s), func(): main.set_speed(s), true)
 		_speed_btns[s] = b
 		bar.add_child(b)
-	bar.add_child(_button("⏭ Drive", func(): main.skip_drive()))
-	_view_btn = _button("🎥 Behind", func(): _view_btn.text = "🎥 " + main.next_view())
+	bar.add_child(_button("Skip drive", func(): main.skip_drive()))
+	_view_btn = _button("Cam: Behind", func(): _view_btn.text = "Cam: " + main.next_view())
 	bar.add_child(_view_btn)
-	_sound_btn = _button("🔊 Voice", func(): _sound_btn.text = main.next_sound())
+	_sound_btn = _button("Sound: voice", func(): _sound_btn.text = main.next_sound())
 	bar.add_child(_sound_btn)
 	bar.add_child(_button("Teams", func(): open_teams()))
 	bar.add_child(_button("Edit AI", func(): open_editor()))
@@ -364,11 +364,11 @@ func mark_speed(s: float) -> void:
 
 
 func mark_paused(p: bool) -> void:
-	_pause_btn.text = "▶" if p else "⏸"
+	_pause_btn.text = "Play" if p else "Pause"
 
 
 func mark_view(v: String) -> void:
-	_view_btn.text = "🎥 " + v
+	_view_btn.text = "Cam: " + v
 
 
 ## ---- overlays ------------------------------------------------------------------------------
@@ -406,7 +406,7 @@ func _open(title: String) -> VBoxContainer:
 	var tl := _label(title, fs + 4, MAGENTA)
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(tl)
-	head.add_child(_button("✕ Close", func(): close_overlay()))
+	head.add_child(_button("× Close", func(): close_overlay()))
 	var sc := DragScroll.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(sc)
@@ -513,7 +513,7 @@ func open_teams() -> void:
 		var b := _button(e[0], func(): main.qlen = e[1]; open_teams(), true)
 		b.button_pressed = is_equal_approx(main.qlen, e[1])
 		qf.add_child(b)
-	var go := _button("▶ Kick off with these teams", func(): close_overlay(); main.new_game())
+	var go := _button("Start a game with these teams", func(): close_overlay(); main.new_game())
 	go.add_theme_font_size_override("font_size", fs + 2)
 	box.add_child(go)
 
@@ -554,7 +554,7 @@ func open_editor(kind := "", name := "") -> void:
 		if _ed_kind == "ai":
 			label = "%s · %s" % [(Library.brain(n) as Brain).group, n]
 		if Library.is_edited(_ed_kind, n):
-			label += " ✎"
+			label += " (edited)"
 		var b := _button(label, func(): _ed_name = n; open_editor(), true)
 		b.button_pressed = n == _ed_name
 		b.add_theme_font_size_override("font_size", fs - 2)
@@ -579,11 +579,11 @@ func open_editor(kind := "", name := "") -> void:
 	var row := HFlowContainer.new()
 	row.add_theme_constant_override("h_separation", 6)
 	box.add_child(row)
-	row.add_child(_button("✓ Check", func(): _lint_live(true)))
-	row.add_child(_button("💾 Save", func(): _save()))
-	row.add_child(_button("↺ Reset to shipped", func(): Library.reset(_ed_kind, _ed_name); open_editor()))
-	row.add_child(_button("⧉ Copy as new", func(): _copy_as_new()))
-	row.add_child(_button("▶ Save & play", func(): if _save(): close_overlay(); main.new_game()))
+	row.add_child(_button("Check", func(): _lint_live(true)))
+	row.add_child(_button("Save", func(): _save()))
+	row.add_child(_button("Reset to shipped", func(): Library.reset(_ed_kind, _ed_name); open_editor()))
+	row.add_child(_button("Copy as new", func(): _copy_as_new()))
+	row.add_child(_button("Save & play", func(): if _save(): close_overlay(); main.new_game()))
 	# the words
 	if _ed_kind == "play":
 		_section(box, "Play syntax")
@@ -688,11 +688,11 @@ func _on_completion() -> void:
 func _lint_live(loud := false) -> void:
 	var errs := Library.lint(_ed_kind, _ed_text.text)
 	if errs.is_empty():
-		_ed_status.text = "[color=#8f8]✓ Reads cleanly.[/color]" + ("" if not loud else " Save to use it.")
+		_ed_status.text = "[color=#8f8]Reads cleanly.[/color]" + ("" if not loud else " Save to use it.")
 	else:
 		var s := "[color=#f99]"
 		for e in errs.slice(0, 6):
-			s += "• " + e.replace("[", "(").replace("]", ")") + "\n"
+			s += "- " + e.replace("[", "(").replace("]", ")") + "\n"
 		_ed_status.text = s + "[/color]"
 
 
@@ -746,7 +746,7 @@ func open_log() -> void:
 			for k in ["off_text", "def_text"]:
 				if e.has(k):
 					var txt: String = e[k]
-					var b := _button("＋ Save %s play" % ("offense" if k == "off_text" else "defense"), func(): _save_generated(txt))
+					var b := _button("+ Save %s play" % ("offense" if k == "off_text" else "defense"), func(): _save_generated(txt))
 					b.add_theme_font_size_override("font_size", fs - 3)
 					row.add_child(b)
 
@@ -788,7 +788,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array, coach: Dictionar
 	var coach_i := int(coach.get("index", -1))
 	var coach_name: String = ((g.teams[team]["coach"]) as Coach).name
 	if coach_i >= 0:
-		var cl := _label("★ Coach %s would call %s - the starred card is the closest in this hand." % [coach_name, String(coach.get("call", ""))], fs - 2, MAGENTA)
+		var cl := _label("COACH'S PICK: %s would call %s - the marked card is the closest in this hand." % [coach_name, String(coach.get("call", ""))], fs - 1, MAGENTA)
 		box.add_child(cl)
 		box.move_child(cl, grid.get_index())
 	for ci in hand.size():
@@ -822,7 +822,24 @@ func open_picker(g: Game, team: int, side: String, hand: Array, coach: Dictionar
 		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.add_child(d)
 		d.setup(p)
-		var nl := _label(("★ " if ci == coach_i else "") + (("%s · %s" % [p.name, "run" if p.kind == "run" else "pass"]) if side == "offense" else p.name), fs - 2, MAGENTA if ci == coach_i else YELLOW)
+		if ci == coach_i:
+			var badge := _label("COACH'S PICK", fs - 2, Color(0.05, 0.02, 0.08))
+			badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			var bsb := StyleBoxFlat.new()
+			bsb.bg_color = MAGENTA
+			bsb.set_corner_radius_all(3)
+			bsb.set_content_margin_all(2)
+			badge.add_theme_stylebox_override("normal", bsb)
+			# over the top of the diagram, so the card keeps its size
+			badge.autowrap_mode = TextServer.AUTOWRAP_OFF
+			badge.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			badge.set_anchors_preset(Control.PRESET_TOP_LEFT)
+			badge.size = Vector2.ZERO
+			badge.position = Vector2(6, 6)
+			badge.z_index = 1
+			card.add_child.call_deferred(badge)
+		var nl := _label((("%s · %s" % [p.name, "run" if p.kind == "run" else "pass"]) if side == "offense" else p.name), fs - 2, MAGENTA if ci == coach_i else YELLOW)
 		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		nl.clip_text = true
@@ -839,7 +856,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array, coach: Dictionar
 	row.add_theme_constant_override("h_separation", 6)
 	row.add_theme_constant_override("v_separation", 6)
 	box.add_child(row)
-	row.add_child(_button("🎲 Deal new plays", func(): main.redeal(side)))
+	row.add_child(_button("Deal new plays", func(): main.redeal(side)))
 	box.add_child(_label("Yellow is the run, the blue line is the line of scrimmage. Defense: shaded zones, dashed lines for man coverage, pink arrows for blitzers.", fs - 3, Color(0.7, 0.74, 0.78)))
 
 
@@ -901,14 +918,14 @@ func show_stats(g: Game, mode: String, snap: Dictionary = {}) -> void:
 	row.add_theme_constant_override("h_separation", 6)
 	box.add_child(row)
 	if mode == "quarter":
-		var go := _button("▶ Continue", func(): close_overlay(); main.resume_after_break())
+		var go := _button("Continue", func(): close_overlay(); main.resume_after_break())
 		go.add_theme_font_size_override("font_size", fs + 2)
 		row.add_child(go)
 		var stop := _button("Stop at quarter breaks", func(): main.stop_at_quarters = not main.stop_at_quarters, true)
 		stop.button_pressed = main.stop_at_quarters
 		row.add_child(stop)
 	if mode == "final":
-		row.add_child(_button("▶ Play again", func(): close_overlay(); main.new_game()))
+		row.add_child(_button("Play again", func(): close_overlay(); main.new_game()))
 		row.add_child(_button("Sim ×10 these teams", func(): close_overlay(); main.run_batch(10)))
 		_final_extras(box, g)
 
