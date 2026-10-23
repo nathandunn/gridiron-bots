@@ -4,8 +4,8 @@ about "Run it, run it again, play-action off it, and blitz on defense."
 offense:
   when game ending and leading by over 0 and clock under 100 -> kneel
   when fourth down and to go under 2 -> call "QB Sneak" or "Power"
-  when fourth down and in field goal range -> field goal
-  when fourth down -> punt
+  when fourth down and to go over 6 -> call "Four Verticals" or "Smash" or "Mesh"
+  when fourth down -> call "Slants" or "Inside Zone" or "Curl Flat"
   when third down and to go over 8 -> call "Smash" or "Curl Flat" or "PA Deep Shot"
   when first down and last play gained over 5 and chance 40% -> call "PA Deep Shot"
   otherwise -> call "Inside Zone" or "Power" or "Toss Sweep" or "Inside Zone" or "Draw"

@@ -369,14 +369,12 @@ func _open_picker(side: String) -> void:
 	_phase = "picking"
 	var hand := PlayGen.hand(game.rng, side, HAND, game.to_go)
 	var team: int = game.poss if side == "offense" else 1 - game.poss
-	hud.open_picker(game, team, side, hand)
+	var coach := game.coach_suggest(side == "offense", hand)
+	hud.open_picker(game, team, side, hand, coach)
 	if OS.get_cmdline_user_args().has("--autopick"):
-		# test hook: pick for the person (punt on 4th, else a random card)
+		# test hook: pick for the person (a random card)
 		var kind := "off" if side == "offense" else "def"
-		if side == "offense" and game.down == 4:
-			(func(): pick_made("kick", "field_goal" if game.fg_range() else "punt")).call_deferred()
-		else:
-			(func(): pick_made(kind, hand[randi() % hand.size()])).call_deferred()
+		(func(): pick_made(kind, hand[randi() % hand.size()])).call_deferred()
 
 
 ## From the picker: kind is "off" / "def" (value: a generated {text, play}), "kick" ("punt" /
@@ -519,7 +517,7 @@ func _next() -> void:
 		hud.show_game_over(game)
 		return
 	# a side the person calls: deal a hand of new plays and wait for the pick
-	if game.calling_for(true) == "pick" and not (_choice.has("off") or _choice.has("kick") or _choice.has("coach_off")):
+	if game.calling_for(true) == "pick" and not (_choice.has("off") or _choice.has("coach_off")):
 		_open_picker("offense")
 		return
 	if game.calling_for(false) == "pick" and not (_choice.has("def") or _choice.has("coach_def") or _choice.has("kick")):

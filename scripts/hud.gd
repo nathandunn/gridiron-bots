@@ -466,9 +466,9 @@ func open_teams() -> void:
 		var b := _button(Game.CALLING_LABEL[mode], func(): main.calling[t] = mode; main.library_changed(); open_teams(), true)
 		b.button_pressed = main.calling[t] == mode
 		cf.add_child(b)
-	var why := {"pick": "You call every play for this side: each down you get a hand of 8 brand-new plays (with diagrams) to choose from, or let the coach call it. On 4th down you can punt or kick.",
+	var why := {"pick": "You call every play for this side: each down you get a hand of 8 brand-new plays (with diagrams) to choose from. The coach's choice is starred. There is no kicking: fourth down is always a go.",
 		"coach": "The coach's rules pick every play.",
-		"random": "Any play in the playbook, picked at random every down. The coach still decides punts and field goals.",
+		"random": "Any play in the playbook, picked at random every down.",
 		"generated": "A brand-new play made up every down: random formation, routes, gaps, coverages and blitzes. Save the good ones from the Log."}
 	box.add_child(_label(why[main.calling[t]], fs - 1, Color(0.8, 0.82, 0.85)))
 	_section(box, "Brains by position")
@@ -770,7 +770,7 @@ func _save_generated(text: String) -> void:
 
 ## ---- calling your own plays ---------------------------------------------------------------
 
-func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
+func open_picker(g: Game, team: int, side: String, hand: Array, coach: Dictionary = {}) -> void:
 	var title := "%s %s · %s" % [Team.NAMES[team], side, g.situation()]
 	var box := _open(title)
 	box.add_child(_label("%s %d - %d %s   ·   Q%d %d:%02d.  Pick a play - all made up just now." % [
@@ -785,9 +785,26 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	box.add_child(grid)
-	for g2 in hand:
+	var coach_i := int(coach.get("index", -1))
+	var coach_name: String = ((g.teams[team]["coach"]) as Coach).name
+	if coach_i >= 0:
+		var cl := _label("★ Coach %s would call %s - the starred card is the closest in this hand." % [coach_name, String(coach.get("call", ""))], fs - 2, MAGENTA)
+		box.add_child(cl)
+		box.move_child(cl, grid.get_index())
+	for ci in hand.size():
+		var g2: Dictionary = hand[ci]
 		var p: Play = g2["play"]
 		var card := Button.new()
+		if ci == coach_i:
+			for st in ["normal", "hover", "pressed"]:
+				var sb := (card.get_theme_stylebox(st) as StyleBoxFlat)
+				if sb != null:
+					sb = sb.duplicate()
+					sb.border_color = MAGENTA
+					sb.set_border_width_all(3)
+					sb.shadow_color = Color(MAGENTA, 0.45)
+					sb.shadow_size = 8
+					card.add_theme_stylebox_override(st, sb)
 		card.focus_mode = Control.FOCUS_NONE
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		card.custom_minimum_size = Vector2(cw, cw * 0.62 + fs * 2.6 + 10.0)
@@ -805,7 +822,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.add_child(d)
 		d.setup(p)
-		var nl := _label(("%s · %s" % [p.name, "run" if p.kind == "run" else "pass"]) if side == "offense" else p.name, fs - 2, YELLOW)
+		var nl := _label(("★ " if ci == coach_i else "") + (("%s · %s" % [p.name, "run" if p.kind == "run" else "pass"]) if side == "offense" else p.name), fs - 2, MAGENTA if ci == coach_i else YELLOW)
 		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		nl.autowrap_mode = TextServer.AUTOWRAP_OFF
 		nl.clip_text = true
@@ -823,11 +840,6 @@ func open_picker(g: Game, team: int, side: String, hand: Array) -> void:
 	row.add_theme_constant_override("v_separation", 6)
 	box.add_child(row)
 	row.add_child(_button("🎲 Deal new plays", func(): main.redeal(side)))
-	row.add_child(_button("Let the coach call it", func(): main.pick_made("coach_off" if side == "offense" else "coach_def", true)))
-	if side == "offense" and g.down == 4:
-		row.add_child(_button("Punt", func(): main.pick_made("kick", "punt")))
-		if g.fg_range():
-			row.add_child(_button("Field goal (%d yd)" % int(round(100.0 - g.yl + 17.0)), func(): main.pick_made("kick", "field_goal")))
 	box.add_child(_label("Yellow is the run, the blue line is the line of scrimmage. Defense: shaded zones, dashed lines for man coverage, pink arrows for blitzers.", fs - 3, Color(0.7, 0.74, 0.78)))
 
 
@@ -1018,8 +1030,6 @@ func _box_score(box: Control, stats: Array, per: Array, names: Array) -> void:
 	rows.append(["Turnovers", "%.1f" % f.call(0, "turnovers"), "%.1f" % f.call(1, "turnovers")])
 	rows.append(["3rd down", _rate(stats[0], "third_conv", "third_att"), _rate(stats[1], "third_conv", "third_att")])
 	rows.append(["Big plays (20+)", "%.1f" % f.call(0, "explosive"), "%.1f" % f.call(1, "explosive")])
-	rows.append(["Punts", "%.1f" % f.call(0, "punts"), "%.1f" % f.call(1, "punts")])
-	rows.append(["Field goals", "%.1f/%.1f" % [f.call(0, "fg"), f.call(0, "fg_att")], "%.1f/%.1f" % [f.call(1, "fg"), f.call(1, "fg_att")]])
 	rows.remove_at(1)
 	for r in rows:
 		for i in 3:

@@ -1,10 +1,11 @@
 class_name Game
 extends RefCounted
-## A game: four quarters, downs and distance, the coaches' calls, kicks, the score and the box
+## A game: four quarters, downs and distance, the coaches' calls, the score and the box
 ## score. Plays themselves are PlaySims; the game asks for the next one with next_snap() and is
 ## told how it went with finish(result).
 ##
-## Kicks are not played out: a kickoff is a touchback, a punt and a field goal are rolled.
+## No kicking: a touchdown is 7 points, a safety is 7 to the defense, and after any score or
+## change of possession the other side starts at its own 25. Fourth down is always a go.
 
 const HASH := 3.08
 
@@ -88,19 +89,12 @@ func _new_drive() -> void:
 	drive = {"team": poss, "start": yl, "plays": 0, "yards": 0.0, "result": ""}
 
 
-## The coach's decision for the coming snap: {kind: "play", off: Play, def: Play} or a kick
-## that has already been resolved ({kind: "punt"/"fg"/"kneel", text}).
 ## What the side on offense / defense picks with, right now.
 func calling_for(on_offense: bool) -> String:
 	return String((offense() if on_offense else defense()).get("calling", "coach"))
 
 
-## Can the offense kick a field goal from here?
-func fg_range() -> bool:
-	return 100.0 - yl + 17.0 <= 55.0
-
-
-## `choice` carries a person's picks: {off: {text, play}} / {def: {text, play}} / {kick: "punt" | "field_goal"}.
+## `choice` carries a person's picks: {off: {text, play}} / {def: {text, play}}.
 ## A side set to "pick" with no choice given plays a made-up play (as in a batch).
 func next_snap(choice: Dictionary = {}) -> Dictionary:
 	if over:
@@ -109,18 +103,12 @@ func next_snap(choice: Dictionary = {}) -> Dictionary:
 	var dc: Coach = defense()["coach"]
 	var od := _coach_call(oc, true, poss)
 	var dd := _coach_call(dc, false, 1 - poss)
-	if calling_for(true) == "pick" and (choice.has("off") or choice.has("kick")):
-		# the person decides kicks too
-		od = {"kind": String(choice.get("kick", "play")) if choice.has("kick") else "play", "play": od.get("play", "")}
-		if od["kind"] == "play" and od["play"] == "":
+	if calling_for(true) == "pick" and choice.has("off"):
+		od = {"kind": "play", "play": od.get("play", "")}
+		if od["play"] == "":
 			od["play"] = Library.plays_for("offense")[0]
-	match String(od["kind"]):
-		"punt":
-			return _punt()
-		"field_goal":
-			return _field_goal()
-		"kneel":
-			return _kneel()
+	if String(od["kind"]) == "kneel":
+		return _kneel()
 	var op: Play = Library.play(od["play"])
 	var dp: Play = Library.play(dd.get("play", ""))
 	if dp == null:
@@ -172,7 +160,7 @@ func make_sim() -> PlaySim:
 	return sim
 
 
-func _coach_call(c: Coach, on_offense: bool, team: int) -> Dictionary:
+func _coach_call(c: Coach, on_offense: bool, team: int, count := true) -> Dictionary:
 	var out := {"kind": "", "play": ""}
 	var rules: Array = c.offense_rules if on_offense else c.defense_rules
 	var act := func(id: String, a: Array) -> bool:
@@ -188,10 +176,10 @@ func _coach_call(c: Coach, on_offense: bool, team: int) -> Dictionary:
 				out["kind"] = "play"
 				out["play"] = opts[rng.randi() % opts.size()]
 				return true
-			"punt", "field_goal", "kneel":
+			"punt", "field_goal":
+				return false   # no kicking in this game: the next rule decides
+			"kneel":
 				if not on_offense:
-					return false
-				if id == "field_goal" and 100.0 - yl + 17.0 > 66.0:
 					return false
 				out["kind"] = id
 				return true
@@ -200,14 +188,32 @@ func _coach_call(c: Coach, on_offense: bool, team: int) -> Dictionary:
 		return false
 	var sense := func(id: String, a: Array) -> bool:
 		return _coach_sense(id, a, team, on_offense)
-	Dsl.run(rules, sense, act, {}, 0.0, Coach.MODIFIERS, coach_tally[team])
+	Dsl.run(rules, sense, act, {}, 0.0, Coach.MODIFIERS, coach_tally[team] if count else {})
 	if out["kind"] == "":
 		var opts := Library.plays_for("offense" if on_offense else "defense")
 		out["kind"] = "play"
 		out["play"] = opts[rng.randi() % opts.size()]
-	if on_offense and down == 4 and out["kind"] == "play" and false:
-		pass
 	return out
+
+
+## Which card in a dealt hand the coach would call: his own call from the playbook, matched to
+## the closest play in the hand. {index, call} - call is the playbook play he had in mind.
+func coach_suggest(on_offense: bool, hand: Array) -> Dictionary:
+	var team := poss if on_offense else 1 - poss
+	var c: Coach = (offense() if on_offense else defense())["coach"]
+	var d := _coach_call(c, on_offense, team, false)
+	var want: Play = Library.play(String(d.get("play", "")))
+	if want == null:
+		return {"index": -1, "call": String(d.get("kind", ""))}
+	var fw := Play.features(want)
+	var best := -1
+	var best_d := INF
+	for i in hand.size():
+		var dist := Play.feature_distance(fw, Play.features(hand[i]["play"]))
+		if dist < best_d:
+			best_d = dist
+			best = i
+	return {"index": best, "call": want.name}
 
 
 func _coach_sense(id: String, a: Array, team: int, on_offense: bool) -> bool:
@@ -266,69 +272,6 @@ func _coach_sense(id: String, a: Array, team: int, on_offense: bool) -> bool:
 			var share := float(k["run"] if id == "they_run_over" else k["pass"]) / tot
 			return share > float(a[0])
 	return false
-
-
-func _fg_chance(dist: float) -> float:
-	if dist <= 20.0:
-		return 0.99
-	return clampf(0.99 - (dist - 20.0) * 0.0105 - maxf(dist - 45.0, 0.0) * 0.014, 0.05, 0.99)
-
-
-func _punt() -> Dictionary:
-	var gross := 43.0 + rng.randfn(0.0, 5.5)
-	var land := yl + gross
-	var st: Dictionary = stats[poss]
-	st["punts"] = int(st["punts"]) + 1
-	var who: String = offense()["name"]
-	var text := ""
-	drive["result"] = "punt"
-	var spent := 9.0
-	if land >= 100.0:
-		yl = 20.0
-		text = "%s punt into the end zone. Touchback." % who
-	else:
-		var ret := maxf(0.0, rng.randfn(6.0, 5.0)) if land < 95.0 else 0.0
-		yl = clampf(100.0 - land + ret, 1.0, 99.0)
-		text = "%s punt %d yards, returned %d." % [who, int(round(gross)), int(round(ret))]
-	poss = 1 - poss
-	down = 1
-	to_go = minf(10.0, 100.0 - yl)
-	ball_x = 0.0
-	_new_drive()
-	_tick(spent, true)
-	var e := {"kind": "punt", "text": text}
-	_log_play(e)
-	return e
-
-
-func _field_goal() -> Dictionary:
-	var dist := 100.0 - yl + 17.0
-	var st: Dictionary = stats[poss]
-	st["fg_att"] = int(st["fg_att"]) + 1
-	var who: String = offense()["name"]
-	var good := rng.randf() < _fg_chance(dist)
-	var text := ""
-	if good:
-		_pts(poss, 3)
-		st["fg"] = int(st["fg"]) + 1
-		text = "%s kick a %d-yard field goal. GOOD." % [who, int(round(dist))]
-		drive["result"] = "FG"
-		_tick(5.0, true)
-		_kickoff(1 - poss)
-	else:
-		text = "%s miss from %d." % [who, int(round(dist))]
-		drive["result"] = "missed FG"
-		var spot := yl - 7.0
-		poss = 1 - poss
-		yl = maxf(100.0 - spot, 20.0)
-		down = 1
-		to_go = 10.0
-		ball_x = 0.0
-		_new_drive()
-		_tick(5.0, true)
-	var e := {"kind": "fg", "text": text, "good": good, "dist": dist}
-	_log_play(e)
-	return e
 
 
 func _kneel() -> Dictionary:
@@ -403,10 +346,9 @@ func finish(sim: PlaySim) -> Dictionary:
 		st["turnovers"] = int(st["turnovers"]) + 1
 		st["ints"] = int(st["ints"]) + (1 if r["turnover"] == "int" else 0)
 		dst["td"] = int(dst["td"]) + 1
-		_pts(1 - team, 6)
+		_pts(1 - team, 7)
 		e["text"] += " Returned for a TOUCHDOWN!"
 		drive["result"] = "pick six"
-		_pat(1 - team)
 		_tick(elapsed, true)
 		_kickoff(team)
 	elif r["turnover"] != "":
@@ -416,36 +358,21 @@ func finish(sim: PlaySim) -> Dictionary:
 		else:
 			st["fumbles"] = int(st["fumbles"]) + 1
 		drive["result"] = "INT" if r["turnover"] == "int" else "fumble"
-		var spot_y := yl + float(r["y"])
-		poss = 1 - poss
-		yl = 100.0 - spot_y
-		if yl <= 0.0:
-			yl = 20.0
-			e["text"] += " Touchback."
-		yl = clampf(yl, 1.0, 99.0)
-		down = 1
-		to_go = minf(10.0, 100.0 - yl)
-		ball_x = clampf(float(r["x"]), -HASH, HASH)
-		_new_drive()
+		# no returns to the spot: every drive starts at the 25
 		_tick(elapsed, true)
+		_kickoff(1 - team)
 	elif r.get("safety", false):
-		_pts(1 - team, 2)
-		e["text"] += " SAFETY."
+		_pts(1 - team, 7)
+		e["text"] += " SAFETY - 7 points!"
 		drive["result"] = "safety"
 		_tick(elapsed, true)
-		poss = 1 - team
-		yl = 35.0
-		down = 1
-		to_go = 10.0
-		ball_x = 0.0
-		_new_drive()
+		_kickoff(1 - team)
 	elif r["td"]:
 		st["td"] = int(st["td"]) + 1
 		st["yards"] = float(st["yards"]) + gain
 		drive["yards"] = float(drive["yards"]) + gain
-		_pts(team, 6)
+		_pts(team, 7)
 		drive["result"] = "TD"
-		_pat(team)
 		_tick(elapsed, true)
 		_kickoff(1 - team)
 	else:
@@ -490,11 +417,7 @@ func _advance_down(gain: float) -> void:
 	if down > 4:
 		down_event = "downs"
 		drive["result"] = "downs"
-		poss = 1 - poss
-		yl = 100.0 - yl
-		down = 1
-		to_go = minf(10.0, 100.0 - yl)
-		_new_drive()
+		_kickoff(1 - poss)
 
 
 ## The player box score.
@@ -586,11 +509,6 @@ func _player_stats(sim: PlaySim, off_t: int, gain: float) -> void:
 func _pts(t: int, n: int) -> void:
 	score[t] += n
 	line[t][clampi(quarter, 1, 4) - 1] += n
-
-
-func _pat(team: int) -> void:
-	if rng.randf() < 0.94:
-		_pts(team, 1)
 
 
 func _tick(secs: float, _stops: bool) -> void:

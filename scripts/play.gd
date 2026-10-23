@@ -260,3 +260,88 @@ func carrier_slot() -> String:
 		if String(assigns[s].get("kind", "")) == "carry":
 			return s
 	return ""
+
+
+## ---- a play's shape, for matching one play to another ------------------------------------------
+
+## How deep a named route goes when the play gives no depth.
+const ROUTE_DEPTH := {"go": 30.0, "fade": 25.0, "post": 18.0, "corner": 14.0, "seam": 20.0, "wheel": 18.0,
+	"dig": 12.0, "curl": 10.0, "comeback": 12.0, "out": 7.0, "in": 8.0, "slant": 5.0, "hitch": 5.0,
+	"drag": 3.0, "cross": 8.0, "flat": 2.0, "screen": 0.0, "swing": 1.0, "angle": 4.0, "stop": 5.0}
+
+
+## A few numbers that say what kind of play this is. Offense: run or pass, where a run goes,
+## how deep the pass goes, the QB's drop, a fake. Defense: how many rush, man, deep, spy.
+static func features(p: Play) -> Dictionary:
+	var f := {}
+	if p.side == "offense":
+		var run := p.kind == "run"
+		var run_x := 0.0
+		var qb_run := 0.0
+		var depths: Array = []
+		var drop := 0.0
+		var fake := 0.0
+		for slot in p.assigns:
+			var a: Dictionary = p.assigns[slot]
+			match String(a.get("kind", "")):
+				"carry":
+					run = true
+					run_x = PlaySim.gap_x_of(a)
+					if slot == "QB":
+						qb_run = 1.0
+				"pass":
+					drop = float(a.get("drop", 5))
+					fake = 1.0 if a.get("fake", false) else 0.0
+				"route":
+					var dep := float(a.get("depth", -1.0))
+					if a.has("path") and not (a["path"] as Array).is_empty():
+						dep = 0.0
+						for pt: Vector2 in a["path"]:
+							dep = maxf(dep, pt.y)
+					elif dep < 0.0:
+						dep = float(ROUTE_DEPTH.get(String(a.get("route", "")), 8.0))
+					depths.append(dep)
+		depths.sort()
+		depths.reverse()
+		var deep := 0.0
+		if not depths.is_empty():
+			deep = (float(depths[0]) + float(depths[mini(1, depths.size() - 1)])) * 0.5
+		f = {"run": 1.0 if run else 0.0, "run_x": run_x, "qb_run": qb_run, "deep": deep if not run else 0.0,
+			"drop": drop, "fake": fake}
+	else:
+		var rush := 0.0
+		var man := 0.0
+		var deep := 0.0
+		var spy := 0.0
+		for slot in p.assigns:
+			var a: Dictionary = p.assigns[slot]
+			match String(a.get("kind", "")):
+				"rush", "blitz":
+					rush += 1.0
+				"man":
+					man += 1.0
+				"spy":
+					spy += 1.0
+				"zone":
+					var z := String(a.get("zone", ""))
+					if z.begins_with("deep") or (z == "custom" and (a.get("at", Vector2.ZERO) as Vector2).y >= 12.0):
+						deep += 1.0
+		f = {"rush": rush, "man": man, "deep": deep, "spy": spy}
+	return f
+
+
+## How unlike two plays are (0 is the same shape).
+static func feature_distance(a: Dictionary, b: Dictionary) -> float:
+	if a.has("run"):
+		var d := absf(float(a["run"]) - float(b["run"])) * 10.0
+		d += absf(float(a["run_x"]) - float(b["run_x"])) * 0.4
+		d += absf(float(a["qb_run"]) - float(b["qb_run"])) * 2.0
+		d += absf(float(a["deep"]) - float(b["deep"])) * 0.25
+		d += absf(float(a["drop"]) - float(b["drop"])) * 0.2
+		d += absf(float(a["fake"]) - float(b["fake"])) * 1.0
+		return d
+	var e := absf(float(a["rush"]) - float(b["rush"])) * 1.5
+	e += absf(float(a["man"]) - float(b["man"])) * 0.8
+	e += absf(float(a["deep"]) - float(b["deep"])) * 1.2
+	e += absf(float(a["spy"]) - float(b["spy"])) * 0.6
+	return e

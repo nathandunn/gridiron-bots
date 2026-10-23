@@ -4,8 +4,8 @@ about "Keeps calling whatever is working, drops what isn't, and defends what the
 offense:
   when game ending and leading by over 0 and clock under 100 -> kneel
   when fourth down and to go under 2 and past midfield -> call "QB Sneak" or "Power"
-  when fourth down and in field goal range -> field goal
-  when fourth down -> punt
+  when fourth down and to go over 6 -> call "Four Verticals" or "Smash" or "Mesh"
+  when fourth down -> call "Slants" or "Inside Zone" or "Curl Flat"
   when "Mesh" averaging over 7 and chance 50% -> call "Mesh"
   when "Smash" averaging over 7 and chance 50% -> call "Smash"
   when "Four Verticals" averaging over 9 and chance 50% -> call "Four Verticals"

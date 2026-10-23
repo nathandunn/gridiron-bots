@@ -4,8 +4,8 @@ about "A scrambling quarterback, sweeps and draws; the defense spies the quarter
 offense:
   when game ending and leading by over 0 and clock under 100 -> kneel
   when fourth down and to go under 3 and past midfield -> call "QB Sneak" or "Toss Sweep"
-  when fourth down and in field goal range -> field goal
-  when fourth down -> punt
+  when fourth down and to go over 6 -> call "Four Verticals" or "Smash" or "Mesh"
+  when fourth down -> call "Slants" or "Inside Zone" or "Curl Flat"
   when third down and to go over 7 -> call "Mesh" or "Smash"
   otherwise -> call "Toss Sweep" or "Draw" or "Power" or "Slants" or "Mesh" or "PA Deep Shot"
 

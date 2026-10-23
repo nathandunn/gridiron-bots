@@ -4,8 +4,8 @@ about "Spread them out and throw it forty times. Goes for it on fourth and short
 offense:
   when game ending and leading by over 0 and clock under 100 -> kneel
   when fourth down and to go under 4 and past midfield -> call "Slants" or "Mesh"
-  when fourth down and in field goal range -> field goal
-  when fourth down -> punt
+  when fourth down and to go over 6 -> call "Four Verticals" or "Smash" or "Mesh"
+  when fourth down -> call "Slants" or "Inside Zone" or "Curl Flat"
   when third down and to go over 8 -> call "Four Verticals" or "Smash"
   when first down and chance 30% -> call "Four Verticals"
   when to go under 2 and chance 40% -> call "Inside Zone"
