@@ -9,6 +9,9 @@ var hud: Hud
 var cam: BroadcastCam
 var game: Game
 var sim: PlaySim
+var sfx: Sfx
+var announcer: Announcer
+var sound_mode := 0          # 0 sound and voice, 1 sound only, 2 muted
 var red_coach := "Balanced"
 var blue_coach := "Air Raid"
 var coaches := ["Balanced", "Air Raid"]
@@ -71,8 +74,19 @@ func _ready() -> void:
 		return
 	if args.has("shot"):
 		# --shot=out.png --at=6 [--panel=teams|editor|log] : a screenshot for checking the look
+		# --on=tackle,big_hit : instead, the first of those moments after --at (shot --after later)
 		var at := float(args.get("at", "6"))
+		if args.has("view"):
+			cam.set_view(String(args["view"]))
 		await get_tree().create_timer(at).timeout
+		if args.has("on"):
+			var kinds := String(args["on"]).split(",")
+			var hit := [false]
+			view.moment.connect(func(a: Dictionary): if String(a["kind"]) in kinds: hit[0] = true)
+			var waited := 0.0
+			while not hit[0] and waited < 240.0:
+				await get_tree().process_frame
+				waited += get_process_delta_time()
 		match String(args.get("panel", "")):
 			"teams": hud.open_teams()
 			"editor": hud.open_editor("ai", String(args.get("name", "")))
@@ -298,10 +312,17 @@ func _build_ui() -> void:
 	add_child(cam)
 	var vp := get_viewport().get_visible_rect().size
 	cam.set_view("Arcade")
+	sfx = Sfx.new()
+	add_child(sfx)
+	announcer = Announcer.new()
+	add_child(announcer)
+	view.moment.connect(_on_moment)
+	view.trash_talk.connect(func(t: int, slot: String, line: String): announcer.trash(t, slot, line))
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
 	hud.mark_view(cam.view)
+	announcer.hud = hud
 	new_game()
 
 
@@ -396,6 +417,63 @@ func _announce(e: Dictionary, poss_before: int, score_before: Array) -> void:
 		hud.toast("FIRST DOWN!\n%s" % who, 1.4)
 	elif float(e.get("gain", 0.0)) >= 20.0:
 		hud.toast("BIG GAIN! +%d" % int(round(float(e["gain"]))), 1.4)
+	_call_result(e, r, who, other, scored)
+
+
+## The announcer's last word on the play, and the crowd.
+func _call_result(e: Dictionary, r: Dictionary, who: String, other: String, scored: int) -> void:
+	if _skip_drive:
+		return
+	var gain := int(round(float(e.get("gain", 0.0))))
+	var line := ""
+	var big := true
+	if r.get("def_td", false):
+		line = "He's gone! %s take it back for six!" % other
+	elif r.get("td", false) or scored >= 6:
+		line = "TOUCHDOWN, %s!" % who
+	elif r.get("safety", false):
+		line = "Safety! Two points for %s." % other
+	elif r.get("turnover", "") != "":
+		line = "Turnover! %s ball." % other
+	elif String(e.get("down_event", "")) == "downs":
+		line = "Stopped short! %s take over on downs." % other
+	elif r.get("incomplete", false):
+		line = "Incomplete."
+		big = false
+	else:
+		line = ("Gain of %d." % gain) if gain > 0 else (("Loss of %d." % -gain) if gain < 0 else "No gain.")
+		big = false
+		if String(e.get("down_event", "")) == "first_down":
+			line += " First down, %s!" % who
+			big = true
+	announcer.result(line, big)
+	if r.get("td", false) or r.get("def_td", false) or scored >= 6:
+		sfx.play("roar", -2.0)
+		var slot := String(r.get("carrier", ""))
+		for p in sim.players:
+			if p.slot == slot and (p == sim.carrier or sim.carrier == null):
+				view.touchdown(p)
+				break
+	elif big or gain >= 12:
+		sfx.play("roar", -9.0)
+
+
+## A moment of the play, heard and called.
+func _on_moment(a: Dictionary) -> void:
+	if _skip_drive or sim == null:
+		return
+	sfx.on_action(String(a["kind"]))
+	announcer.on_action(a, sim)
+
+
+## Sound and voice, voice off, or quiet. Returns the button's new label.
+func next_sound() -> String:
+	sound_mode = (sound_mode + 1) % 3
+	sfx.on = sound_mode < 2
+	announcer.voice = sound_mode == 0
+	if sound_mode != 0:
+		announcer.stop()
+	return ["🔊 Voice", "🔉 Sound", "🔇 Muted"][sound_mode]
 
 
 func resume_after_break() -> void:
@@ -468,6 +546,7 @@ func _next() -> void:
 	var team: String = Team.NAMES[game.poss]
 	hud.show_call("%s: %s   vs   %s" % [team, snap["off_name"], snap["def_name"]])
 	view.set_play(sim, game.poss, game.yl, game.to_go)
+	announcer.presnap(game, String(snap["off_name"]), String(snap["def_name"]))
 	_phase = "presnap"
 	_wait = PRESNAP
 
@@ -516,6 +595,7 @@ func _process(delta: float) -> void:
 				var e := game.finish(sim)
 				hud.show_result(String(e["text"]))
 				hud.show_state(game)
+				sfx.play("whistle", -10.0)
 				_announce(e, poss_before, score_before)
 				hud.show_board(true)
 				if poss_before != game.poss:

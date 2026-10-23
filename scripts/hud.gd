@@ -20,6 +20,12 @@ var _board: Control
 var _board_tw: Tween
 var _toast_t := 0.0
 var _progress: Label
+var _cap_box: PanelContainer
+var _cap: RichTextLabel
+var _cap_lines: Array = []    # [text, color], newest last
+var _cap_t := 0.0
+var _board_on := true
+var _sound_btn: Button
 var fs := 15                 # base font size
 
 # editor state
@@ -72,6 +78,7 @@ func setup(m: Node) -> void:
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast.visible = false
 	_root.add_child(_toast)
+	_build_caption()
 
 
 func _make_theme() -> Theme:
@@ -206,6 +213,7 @@ func show_state(g: Game) -> void:
 func show_board(on: bool) -> void:
 	if _board == null:
 		return
+	_board_on = on
 	if _board_tw != null and _board_tw.is_valid():
 		_board_tw.kill()
 	_board_tw = create_tween()
@@ -240,12 +248,76 @@ func toast(text: String, secs := 1.6) -> void:
 	_toast_t = secs
 
 
+## ---- play-by-play captions ----------------------------------------------------------------
+
+func _build_caption() -> void:
+	_cap_box = PanelContainer.new()
+	_cap_box.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_cap_box.offset_left = 8
+	_cap_box.offset_right = -8
+	_cap_box.offset_top = 46
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.01, 0.02, 0.05, 0.7)
+	sb.border_color = Color(MAGENTA, 0.7)
+	sb.border_width_left = 3
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(6)
+	_cap_box.add_theme_stylebox_override("panel", sb)
+	_cap_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cap = RichTextLabel.new()
+	_cap.bbcode_enabled = true
+	_cap.fit_content = true
+	_cap.scroll_active = false
+	_cap.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cap.add_theme_font_size_override("normal_font_size", fs)
+	_cap.add_theme_font_size_override("bold_font_size", fs + 1)
+	_cap_box.add_child(_cap)
+	_cap_box.visible = false
+	_root.add_child(_cap_box)
+
+
+## A line from the announcer (or a robot). The last two show; they fade when the play goes quiet.
+func caption(text: String, big := false, color := Color(0.9, 0.97, 1.0)) -> void:
+	_cap_lines.append([text, YELLOW if big else color, big])
+	while _cap_lines.size() > 2:
+		_cap_lines.pop_front()
+	var out := ""
+	for i in _cap_lines.size():
+		var ln: Array = _cap_lines[i]
+		var c: Color = ln[1]
+		if i < _cap_lines.size() - 1:
+			c = c.darkened(0.35)
+		var t := String(ln[0]).replace("[", "(").replace("]", ")")
+		out += ("\n" if out != "" else "") + ("[b][color=#%s]%s[/color][/b]" % [c.to_html(false), t] if ln[2] else "[color=#%s]%s[/color]" % [c.to_html(false), t])
+	_cap.text = out
+	_cap_box.visible = true
+	_cap_box.modulate.a = 1.0
+	_cap_t = 3.5
+
+
+func clear_caption() -> void:
+	_cap_lines.clear()
+	_cap_box.visible = false
+
+
 func set_progress(text: String) -> void:
 	_progress.text = text
 	_progress.visible = text != ""
 
 
 func _process(delta: float) -> void:
+	if _cap_box != null and _cap_box.visible:
+		# under the scoreboard when it is up, in its place while the ball is live
+		var want := 46.0 + ((_board.size.y + 6.0) if _board_on else 0.0)
+		_cap_box.offset_top = lerpf(_cap_box.offset_top, want, minf(delta * 10.0, 1.0))
+		_cap_box.offset_bottom = _cap_box.offset_top
+		_cap_t -= delta
+		if _cap_t < 0.6:
+			_cap_box.modulate.a = maxf(_cap_t / 0.6, 0.0)
+		if _cap_t <= 0.0:
+			_cap_box.visible = false
+			_cap_lines.clear()
 	if _toast_t > 0.0:
 		_toast_t -= delta
 		_toast.position = Vector2(get_viewport().get_visible_rect().size.x * 0.5 - _toast.size.x * 0.5, get_viewport().get_visible_rect().size.y * 0.42)
@@ -275,6 +347,8 @@ func _build_controls() -> void:
 	bar.add_child(_button("⏭ Drive", func(): main.skip_drive()))
 	_view_btn = _button("🎥 Behind", func(): _view_btn.text = "🎥 " + main.next_view())
 	bar.add_child(_view_btn)
+	_sound_btn = _button("🔊 Voice", func(): _sound_btn.text = main.next_sound())
+	bar.add_child(_sound_btn)
 	bar.add_child(_button("Teams", func(): open_teams()))
 	bar.add_child(_button("Edit AI", func(): open_editor()))
 	bar.add_child(_button("Sim ×10", func(): main.run_batch(10)))

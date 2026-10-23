@@ -127,6 +127,18 @@ var snapped := false
 var over := false
 var result := {}
 var events: Array = []       # {t, text}
+## What happened, moment by moment, for the view to act out: {t, kind, a, b, pos}. a and b are
+## player idx (or -1), pos a play-frame point. Kinds: throw, handoff, catch, drop, pbu, int,
+## tackle, sack, big_hit, dive_tackle, miss, dive_miss, juke, stiff_arm, fumble, recover,
+## incomplete, pancake, shed.
+var actions: Array = []
+
+
+func _fx(kind: String, a: P = null, b: P = null, pos := Vector2.INF) -> void:
+	var at := pos
+	if at == Vector2.INF:
+		at = b.pos if b != null else (a.pos if a != null else ball_pos)
+	actions.append({"t": t, "kind": kind, "a": a.idx if a != null else -1, "b": b.idx if b != null else -1, "pos": at})
 
 var off_play: Play
 var def_play: Play
@@ -622,6 +634,7 @@ func _act(id: String, a: Array, p: P) -> bool:
 				return false
 			p.juke_until = t + 0.4
 			p.juke_cd = t + 1.6
+			_fx("juke", p, _nearest_enemy(p, false))
 			p.slow_until = maxf(p.slow_until, t + 0.3)   # a juke costs a step
 			var e := _nearest_enemy(p, false)
 			if e != null:
@@ -635,6 +648,7 @@ func _act(id: String, a: Array, p: P) -> bool:
 				return false
 			p.stiff_until = t + 0.5
 			p.stiff_cd = t + 1.0
+			_fx("stiff_arm", p, _nearest_enemy(p, false))
 			return true
 		"lower_shoulder":
 			if not _is_runner(p):
@@ -1050,6 +1064,7 @@ func _throw(qb: P, r: P) -> bool:
 	air = {"from": qb.pos, "to": to, "t0": t, "T": T, "lob": dist > 28.0, "dist": dist}
 	air_target = r
 	stat["target"] = r.slot
+	_fx("throw", qb, r, to)
 	_bump("att", qb)
 	_say("%s throws to %s" % [qb.slot, r.slot])
 	carrier = null
@@ -1397,6 +1412,7 @@ func _handoff(qb: P, rb: P) -> void:
 	carrier = rb
 	ball_state = "held"
 	_bump("rush_att", rb)
+	_fx("handoff", qb, rb)
 	_say("handoff to %s" % rb.slot)
 
 
@@ -1958,6 +1974,7 @@ func _resolve_blocks() -> void:
 				# all or nothing: he goes down, or the blocker does
 				if rng.randf() < 0.45 + (float(b.body["power"]) - float(e.body["agility"])) * 0.5:
 					_knock_down(e, 1.1)
+					_fx("pancake", b, e)
 				else:
 					_knock_down(b, 1.2)
 				_unlock(b)
@@ -2181,6 +2198,7 @@ func _arrive() -> void:
 		var p_pbu := 0.45 * q * (0.5 + float(best_d.body["agility"]) * 0.6)
 		if best_o == null or rng.randf() < p_pbu * (0.7 if best_o.manner.get("high_point", false) else 1.0):
 			_say("broken up by %s" % best_d.slot)
+			_fx("pbu", best_d, best_o, to)
 			stat["pbu_by"] = best_d.slot
 			_incomplete("broken up")
 			return
@@ -2200,6 +2218,7 @@ func _arrive() -> void:
 			_catch(best_o)
 			return
 		_say("dropped by %s" % best_o.slot)
+		_fx("drop", best_o, null, to)
 	_incomplete("incomplete")
 
 
@@ -2212,6 +2231,7 @@ func _catch(r: P) -> void:
 	stat["catch_y"] = r.pos.y
 	stat["catch_slot"] = r.slot
 	_say("caught by %s" % r.slot)
+	_fx("catch", r, null, air["to"])
 	if r.manner.get("secure", false):
 		r.slow_until = t + 0.4
 	if r.pos.y >= to_goal:
@@ -2225,6 +2245,7 @@ func _intercept(d: P) -> void:
 	_bump("int_by", d)
 	stat["turnover"] = "int"
 	_say("INTERCEPTED by %s" % d.slot)
+	_fx("int", d, air_target, air["to"])
 	for p: P in players:
 		if p.engaged != null:
 			_unlock(p)
@@ -2232,11 +2253,14 @@ func _intercept(d: P) -> void:
 
 
 func _incomplete(why: String) -> void:
+	if not air.is_empty() and not air.get("away", false):
+		_fx("incomplete", null, null, air["to"])
 	ball_state = "dead"
 	_end(why, Vector2(ball_x, 0))
 
 
 func _recover(p: P) -> void:
+	_fx("recover", p)
 	if p.side == 1:
 		stat["turnover"] = "fumble"
 		stat["fr_by"] = p.slot
@@ -2312,6 +2336,8 @@ func _contacts() -> void:
 				fall -= 0.4
 			var spot := c.pos + Vector2(0, dir * maxf(fall, 0.0))
 			stat["tackler"] = e.slot
+			var is_sack := c.slot == "QB" and c.side == 0 and not handed and not thrown and c.pos.y < 0.0 and String(c.assign.get("kind", "")) == "pass"
+			_fx("sack" if is_sack else ("dive_tackle" if dive else ("big_hit" if e.manner.get("hit_hard", false) or (e.vel - c.vel).length() > 11.5 else "tackle")), e, c)
 			if rng.randf() < pf:
 				_fumble(c, e)
 				return
@@ -2328,6 +2354,7 @@ func _contacts() -> void:
 			else:
 				e.stumble_until = t + 0.35
 			c.slow_until = t + 0.3
+			_fx("dive_miss" if dive else "miss", e, c)
 			_bump("missed", e)
 			if c.manner.get("lower_shoulder", false) and float(c.body["power"]) > float(e.body["power"]):
 				_say("%s runs through %s" % [c.slot, e.slot])
@@ -2337,6 +2364,7 @@ func _fumble(c: P, by: P) -> void:
 	_say("FUMBLE! %s strips it" % by.slot)
 	stat["ff_by"] = by.slot
 	stat["fumbler"] = c.slot
+	_fx("fumble", c, by)
 	_bump("fumble", c)
 	ball_state = "loose"
 	ball_pos = c.pos + Vector2(rng.randf_range(-2.5, 2.5), rng.randf_range(-2.0, 2.0))

@@ -1,8 +1,8 @@
 class_name BroadcastCam
 extends Node3D
 ## Follows the ball. Three views: Behind (from behind the offense - best on a phone held
-## upright), Sideline (the TV shot) and Overhead (the coach's film). Drag to swing round,
-## wheel or pinch to zoom; picking a view again puts it back.
+## upright), Sideline (the TV shot) and Overhead (the coach's film). The camera is not
+## steered by mouse or touch: each view frames the play the same way every time.
 
 const VIEWS := ["Arcade", "Behind", "Sideline", "Overhead"]
 var view := "Arcade"
@@ -73,8 +73,11 @@ func _process(delta: float) -> void:
 	_cam.look_at(target, Vector3.UP if view != "Overhead" else Vector3(0, 0, _dir))
 
 
+const STEERABLE := false   # drag to swing, wheel/pinch to zoom: off
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if input_blocked:
+	if input_blocked or not STEERABLE:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
