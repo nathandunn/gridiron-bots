@@ -285,7 +285,7 @@ func _build_ui() -> void:
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color(0.02, 0.025, 0.05)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.45, 0.5, 0.7)
+	e.ambient_light_color = Color(0.6, 0.6, 0.65)
 	e.ambient_light_energy = 0.55
 	e.glow_enabled = true
 	e.glow_intensity = 0.9

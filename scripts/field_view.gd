@@ -8,7 +8,7 @@ extends Node3D
 
 const HALF_W := 26.667
 ## Team colours (the HUD uses these too): a hot red-orange and an electric blue.
-const COLORS := [Color(1.0, 0.28, 0.2), Color(0.22, 0.6, 1.0)]
+const COLORS := [Color(1.0, 0.24, 0.18), Color(0.15, 0.62, 1.0)]
 const NEON := [Color(1.0, 0.35, 0.25), Color(0.3, 0.75, 1.0)]
 const CYAN := Color(0.3, 0.95, 1.0)
 const MAGENTA := Color(1.0, 0.3, 0.75)
@@ -126,10 +126,11 @@ func _line(c: Color, energy: float) -> MeshInstance3D:
 func _build_field() -> void:
 	# the arena floor beyond the field
 	_box(Vector3(140, 0.1, 190), Vector3(0, -0.1, 0), _metal(Color(0.07, 0.08, 0.1)))
-	# the field: dark steel plates in five-yard bands
+	# the field: light grey steel plates in five-yard bands - neutral, so red and blue robots
+	# both stand out against it
 	for i in 20:
-		var shade := Color(0.12, 0.14, 0.19) if i % 2 == 0 else Color(0.1, 0.12, 0.16)
-		_box(Vector3(HALF_W * 2.0, 0.04, 5.0), Vector3(0, -0.02, -47.5 + i * 5.0), _metal(shade))
+		var shade := Color(0.42, 0.43, 0.44) if i % 2 == 0 else Color(0.37, 0.38, 0.39)
+		_box(Vector3(HALF_W * 2.0, 0.04, 5.0), Vector3(0, -0.02, -47.5 + i * 5.0), _mat(shade))   # matte: no glare
 	# end zones: team light, with chevrons
 	for t in 2:
 		var z := -55.0 if t == 0 else 55.0
