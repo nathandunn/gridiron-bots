@@ -902,6 +902,11 @@ func _lead(qb: P, r: P) -> Array:
 		var dist := qb.pos.distance_to(c)
 		T = 0.18 + dist / _ball_speed(dist) + (0.25 if dist > 28.0 else 0.0)
 		c = _predict(r, T)
+	# never lead him further than he can actually run before the ball gets there (a route that
+	# cuts, or a receiver still speeding up, would otherwise leave the ball landing on nobody)
+	var can := r.spd() * maxf(T - 0.15, 0.1) * 0.85
+	if r.pos.distance_to(c) > can:
+		c = r.pos + (c - r.pos).normalized() * can
 	return [c, T]
 
 
@@ -1102,7 +1107,10 @@ func _drive(p: P) -> void:
 			p.mem["_want"] = Vector2.ZERO
 			return
 	if p.engaged != null:
-		return
+		if ball_state == "air" and p == air_target:
+			_unlock(p)       # the ball is coming to him: he breaks off whatever he was tangled in
+		else:
+			return
 	var want := Vector2.ZERO
 	var frac := 1.0
 	if ball_state == "dead":
@@ -1116,6 +1124,9 @@ func _drive(p: P) -> void:
 		_drive_carrier(p)
 		return
 	if ball_state == "air":
+		if p == air_target and not p.blockers.is_empty():
+			for e: P in p.blockers.duplicate():
+				_unlock(e)   # a jam lets go when the ball is in the air to him
 		_drive_air(p)
 		return
 	var live_pass := carrier != null and carrier.slot == "QB" and carrier.side == 0 and not thrown and not handed and not qb_runner
@@ -2097,6 +2108,8 @@ func _move_all() -> void:
 				want *= 0.3
 			if p == carrier and t < p.juke_until:
 				acc *= 1.6
+			if p == air_target and ball_state == "air":
+				acc *= 1.8   # breaking on the ball
 			p.vel = p.vel.move_toward(want, acc * DT * (2.5 if want.length() < p.vel.length() - 0.5 else 1.0))
 		p.pos += p.vel * DT
 		if p.vel.length() > 0.5:
