@@ -478,7 +478,7 @@ func open_teams() -> void:
 		var b := _button(Game.CALLING_LABEL[mode], func(): main.calling[t] = mode; main.library_changed(); open_teams(), true)
 		b.button_pressed = main.calling[t] == mode
 		cf.add_child(b)
-	var why := {"pick": "You call every play for this side: each down you get a hand of 8 brand-new plays (with diagrams) to choose from. The coach's choice is starred. There is no kicking: fourth down is always a go.",
+	var why := {"pick": "You call every play for this side: each down you get a hand of 8 brand-new plays (with diagrams) to choose from. The coach's choice is marked, with the rule he used. There is no kicking: fourth down is always a go.",
 		"coach": "The coach's rules pick every play.",
 		"random": "Any play in the playbook, picked at random every down.",
 		"generated": "A brand-new play made up every down: random formation, routes, gaps, coverages and blitzes. Save the good ones from the Log."}
@@ -800,7 +800,7 @@ func open_picker(g: Game, team: int, side: String, hand: Array, coach: Dictionar
 	var coach_i := int(coach.get("index", -1))
 	var coach_name: String = ((g.teams[team]["coach"]) as Coach).name
 	if coach_i >= 0:
-		var cl := _label("COACH'S PICK: %s would call %s - the marked card is the closest in this hand." % [coach_name, String(coach.get("call", ""))], fs - 1, MAGENTA)
+		var cl := _label("COACH'S PICK: %s would call %s (his rule: %s). The marked card is the closest to it in this hand." % [coach_name, String(coach.get("call", "")), String(coach.get("why", "-"))], fs - 1, MAGENTA)
 		box.add_child(cl)
 		box.move_child(cl, grid.get_index())
 	for ci in hand.size():

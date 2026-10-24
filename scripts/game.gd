@@ -188,7 +188,7 @@ func _coach_call(c: Coach, on_offense: bool, team: int, count := true) -> Dictio
 		return false
 	var sense := func(id: String, a: Array) -> bool:
 		return _coach_sense(id, a, team, on_offense)
-	Dsl.run(rules, sense, act, {}, 0.0, Coach.MODIFIERS, coach_tally[team] if count else {})
+	out["line"] = Dsl.run(rules, sense, act, {}, 0.0, Coach.MODIFIERS, coach_tally[team] if count else {})
 	if out["kind"] == "":
 		var opts := Library.plays_for("offense" if on_offense else "defense")
 		out["kind"] = "play"
@@ -205,6 +205,11 @@ func coach_suggest(on_offense: bool, hand: Array) -> Dictionary:
 	var want: Play = Library.play(String(d.get("play", "")))
 	if want == null:
 		return {"index": -1, "call": String(d.get("kind", ""))}
+	# which of his rules decided it, in his own words
+	var why := "nothing special: his usual mix"
+	for rr in (c.offense_rules if on_offense else c.defense_rules):
+		if int(rr["line"]) == int(d.get("line", -1)):
+			why = String(rr["text"])
 	var fw := Play.features(want)
 	var best := -1
 	var best_d := INF
@@ -213,7 +218,7 @@ func coach_suggest(on_offense: bool, hand: Array) -> Dictionary:
 		if dist < best_d:
 			best_d = dist
 			best = i
-	return {"index": best, "call": want.name}
+	return {"index": best, "call": want.name, "why": why}
 
 
 func _coach_sense(id: String, a: Array, team: int, on_offense: bool) -> bool:
