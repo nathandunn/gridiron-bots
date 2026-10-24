@@ -15,6 +15,7 @@ var _last := Vector2.ZERO
 var _vel := 0.0             # pixels a second, for the fling
 var _fling := 0.0
 var _last_t := 0
+var _pos := 0.0             # where we have scrolled to, in fractions of a pixel (scroll_vertical is whole pixels)
 
 
 func _ready() -> void:
@@ -62,6 +63,7 @@ func _press(pos: Vector2) -> void:
 	_last = pos
 	_vel = 0.0
 	_fling = 0.0
+	_pos = float(scroll_vertical)
 	_last_t = Time.get_ticks_msec()
 
 
@@ -73,7 +75,7 @@ func _move(pos: Vector2) -> void:
 		_cancel_press()
 	if _dragging:
 		var dy := pos.y - _last.y
-		scroll_vertical = int(scroll_vertical - dy)
+		_scroll_to(_pos - dy)
 		var now := Time.get_ticks_msec()
 		var dt := maxf((now - _last_t) / 1000.0, 0.001)
 		_vel = lerpf(_vel, -dy / dt, 0.4)
@@ -137,7 +139,17 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if absf(_fling) > 20.0 and not _down:
-		scroll_vertical = int(scroll_vertical + _fling * delta)
+		_scroll_to(_pos + _fling * delta)
 		_fling *= exp(-FRICTION * delta)
 	else:
+		_fling = 0.0
+
+
+## Keep the fraction of a pixel too: small finger moves in either direction add up, instead of
+## being rounded away (which made slow swipes one way stick).
+func _scroll_to(y: float) -> void:
+	var top := maxf(get_v_scroll_bar().max_value - size.y, 0.0)
+	_pos = clampf(y, 0.0, top)
+	scroll_vertical = int(roundf(_pos))
+	if _pos <= 0.0 or _pos >= top:
 		_fling = 0.0

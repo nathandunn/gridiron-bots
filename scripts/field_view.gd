@@ -648,8 +648,15 @@ func _sparks(at: Vector3, n: int, c: Color) -> void:
 	_fx_nodes.append({"node": fl, "t0": _t, "life": 0.25, "kind": "flash"})
 
 
+var _tears_now := 0
+
+
 func _tick_fx(delta: float) -> void:
 	var keep: Array = []
+	_tears_now = 0
+	for n0 in _fx_nodes:
+		if n0["kind"] == "tear":
+			_tears_now += 1
 	for n: Dictionary in _fx_nodes:
 		var node: Node3D = n["node"]
 		var age := _t - float(n["t0"])
@@ -677,6 +684,14 @@ func _tick_fx(delta: float) -> void:
 					lab.position = Vector3(at.x, float(n["y0"]) + 0.3 * u, at.z)
 				lab.modulate.a = 1.0 if u < 0.8 else 1.0 - (u - 0.8) / 0.2
 				lab.outline_modulate.a = lab.modulate.a
+			"tear":
+				var v: Vector3 = n["vel"]
+				v.y -= 14.0 * delta
+				n["vel"] = v
+				node.position += v * delta
+				if node.position.y < 0.05:
+					node.position.y = 0.05
+					node.scale = Vector3(1.8, 0.2, 1.8)   # a little puddle
 			"spark":
 				var v: Vector3 = n["vel"]
 				v.y -= 18.0 * delta
@@ -978,9 +993,10 @@ func _celebrate_one(p: PlaySim.P, e: Dictionary, delta: float) -> void:
 	(e["arms"][1] as Node3D).rotation.x = float(ca[1])
 	(e["legs"][0] as Node3D).rotation.x = float(legs[0])
 	(e["legs"][1] as Node3D).rotation.x = float(legs[1])
-	# tears: blue drops from the visor of every few criers
-	if p.team != int(_celeb["team"]) and p.idx % 2 == 0 and randf() < delta * 5.0:
-		_tear(world(cur, 1.95 + float(e["hop"])), yaw)
+	# tears: streams of blue drops from both eyes of every crier
+	if p.team != int(_celeb["team"]) and randf() < delta * 9.0:
+		var eye_h := (1.95 + float(e["hop"])) - 0.25 * float(e["tilt"])
+		_tear(world(cur, eye_h), yaw)
 
 
 func _tear(at: Vector3, yaw: float) -> void:
@@ -993,13 +1009,15 @@ func _tear(at: Vector3, yaw: float) -> void:
 		m.emission = c
 		m.emission_energy_multiplier = 3.0
 		_spark_mat[c] = m
+	if _tears_now > 160:
+		return                       # enough tears on the field already
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.07, 0.11, 0.07)
+	bm.size = Vector3(0.13, 0.2, 0.13)
 	mi.mesh = bm
 	mi.material_override = _spark_mat[c]
 	var side := 0.1 if randf() < 0.5 else -0.1
 	mi.position = at + Vector3(sin(yaw) * 0.25 + cos(yaw) * side, 0, cos(yaw) * 0.25 - sin(yaw) * side)
 	add_child(mi)
-	var v := Vector3(sin(yaw), 0, cos(yaw)) * 0.8 + Vector3(0, 0.6, 0)
-	_fx_nodes.append({"node": mi, "t0": _t, "life": 0.7, "kind": "spark", "vel": v})
+	var v := Vector3(sin(yaw), 0, cos(yaw)) * 1.4 + Vector3(cos(yaw) * side * 6.0, 1.8, -sin(yaw) * side * 6.0)
+	_fx_nodes.append({"node": mi, "t0": _t, "life": 0.9, "kind": "tear", "vel": v})

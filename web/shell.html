@@ -14,6 +14,9 @@ html, body, #canvas {
 	margin: 0;
 	padding: 0;
 	border: 0;
+	/* the game handles every swipe itself: no browser scrolling, zoom or pull-to-refresh */
+	touch-action: none;
+	overscroll-behavior: none;
 }
 
 body {
