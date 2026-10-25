@@ -18,8 +18,13 @@ var _last_t := 0
 var _pos := 0.0             # where we have scrolled to, in fractions of a pixel (scroll_vertical is whole pixels)
 
 
+var _held: BaseButton = null   # the button the finger went down on, switched off while we scroll
+
+
 func _ready() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Godot's own touch scrolling would fight ours: never let it start
+	scroll_deadzone = 1000000
 	# a slim bar as a hint of where you are; it isn't needed to scroll
 	var bar := get_v_scroll_bar()
 	bar.custom_minimum_size.x = 4
@@ -84,28 +89,26 @@ func _move(pos: Vector2) -> void:
 	_last = pos
 
 
-## The finger went down on a button and is now scrolling: let go of the button far away from it,
-## so it un-presses without firing.
+## The finger went down on a button and is now scrolling: switch that button off until the
+## finger lifts, which drops its press, so it doesn't fire. (No made-up events: an earlier
+## version sent a fake far-away move, which Godot's own scrolling read as a huge drag.)
 func _cancel_press() -> void:
-	var far := Vector2(-10000, -10000)
-	var away := InputEventMouseMotion.new()
-	away.position = far
-	away.global_position = far
-	away.button_mask = MOUSE_BUTTON_MASK_LEFT
-	var up := InputEventMouseButton.new()
-	up.button_index = MOUSE_BUTTON_LEFT
-	up.pressed = false
-	up.position = far
-	up.global_position = far
-	var vp := get_viewport()
-	vp.push_input.call_deferred(away)
-	vp.push_input.call_deferred(up)
+	var c := _control_at(_start)
+	while c != null and c != self and not (c is BaseButton):
+		c = c.get_parent() as Control
+	if c is BaseButton and not (c as BaseButton).disabled:
+		_held = c
+		_held.disabled = true
 
 
 func _release() -> bool:
 	if not _down:
 		return false
 	_down = false
+	if _held != null:
+		var b := _held
+		_held = null
+		(func(): if is_instance_valid(b): b.disabled = false).call_deferred()
 	if _dragging:
 		_dragging = false
 		# a flick keeps going; a slide that stopped before lifting doesn't
