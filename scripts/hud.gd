@@ -38,9 +38,13 @@ var _ed_names_box: HFlowContainer
 var _ed_words_box: HFlowContainer
 var _ed_example: Label
 
-const CYAN := Color(0.35, 0.95, 1.0)
-const MAGENTA := Color(1.0, 0.38, 0.8)
-const YELLOW := Color(1.0, 0.88, 0.3)
+## The interface palette: a stadium broadcast look - dark slate panels, stadium-light amber for
+## what matters (titles, the selected choice), sky blue for headings, gold for highlights. (The
+## names are kept from the first neon palette so nothing else has to change.)
+const CYAN := Color(0.5, 0.8, 1.0)          # headings, information
+const MAGENTA := Color(1.0, 0.64, 0.16)     # the accent: titles, selected, the coach's pick
+const YELLOW := Color(1.0, 0.86, 0.36)      # highlights
+const INK := Color(0.08, 0.07, 0.06)        # text on the accent
 const KIND_LABEL := {"coach": "Coaches", "play": "Plays", "ai": "Position brains"}
 const PLAY_HELP := """Assignments, one line per position (OL, WR, DL, LB, CB, S set the whole group):
 QB: pass drop 3|5|7 read WR1 WR2 ... · play action drop 7 read ... · handoff · run sneak
@@ -73,7 +77,7 @@ func setup(m: Node) -> void:
 	_toast.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_toast.add_theme_font_size_override("font_size", fs + 22)
 	_toast.add_theme_color_override("font_color", YELLOW)
-	_toast.add_theme_color_override("font_outline_color", MAGENTA)
+	_toast.add_theme_color_override("font_outline_color", Color(0.12, 0.06, 0.0))
 	_toast.add_theme_constant_override("outline_size", 12)
 	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast.visible = false
@@ -98,29 +102,32 @@ func _make_theme() -> Theme:
 			sb.shadow_color = Color(border, 0.45)
 			sb.shadow_size = glow
 		return sb
-	th.set_stylebox("normal", "Button", mk.call(Color(0.03, 0.05, 0.09, 0.92), Color(0.2, 0.75, 0.9, 0.85)))
-	th.set_stylebox("hover", "Button", mk.call(Color(0.05, 0.1, 0.16, 0.95), CYAN, 4))
-	th.set_stylebox("pressed", "Button", mk.call(Color(0.85, 0.2, 0.62), MAGENTA, 6))
-	th.set_stylebox("hover_pressed", "Button", mk.call(Color(0.95, 0.28, 0.7), MAGENTA, 6))
-	th.set_stylebox("disabled", "Button", mk.call(Color(0.04, 0.05, 0.07, 0.8), Color(0.25, 0.28, 0.32)))
+	th.set_stylebox("normal", "Button", mk.call(Color(0.15, 0.18, 0.24, 0.96), Color(0.3, 0.35, 0.44)))
+	th.set_stylebox("hover", "Button", mk.call(Color(0.2, 0.24, 0.32, 0.98), CYAN, 3))
+	th.set_stylebox("pressed", "Button", mk.call(MAGENTA, Color(1.0, 0.8, 0.45), 4))
+	th.set_stylebox("hover_pressed", "Button", mk.call(MAGENTA.lightened(0.1), Color(1.0, 0.85, 0.55), 4))
+	th.set_stylebox("disabled", "Button", mk.call(Color(0.1, 0.11, 0.14, 0.85), Color(0.2, 0.22, 0.26)))
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	th.set_color("font_color", "Button", Color(0.85, 0.97, 1.0))
+	th.set_color("font_color", "Button", Color(0.94, 0.95, 0.97))
 	th.set_color("font_hover_color", "Button", Color.WHITE)
-	th.set_color("font_pressed_color", "Button", Color.WHITE)
-	th.set_color("font_hover_pressed_color", "Button", Color.WHITE)
+	th.set_color("font_pressed_color", "Button", INK)
+	th.set_color("font_hover_pressed_color", "Button", INK)
+	th.set_color("font_disabled_color", "Button", Color(0.48, 0.5, 0.55))
 	var panel := StyleBoxFlat.new()
-	panel.bg_color = Color(0.02, 0.03, 0.06, 0.96)
-	panel.border_color = MAGENTA
-	panel.set_border_width_all(2)
-	panel.set_corner_radius_all(6)
+	panel.bg_color = Color(0.07, 0.09, 0.13, 0.97)
+	panel.border_color = Color(0.26, 0.31, 0.4)
+	panel.set_border_width_all(1)
+	panel.border_width_top = 4
+	panel.border_color = MAGENTA          # an amber bar across the top of every panel
+	panel.set_corner_radius_all(8)
 	panel.set_content_margin_all(12)
-	panel.shadow_color = Color(1.0, 0.3, 0.75, 0.35)
-	panel.shadow_size = 10
+	panel.shadow_color = Color(0, 0, 0, 0.55)
+	panel.shadow_size = 12
 	th.set_stylebox("panel", "PanelContainer", panel)
 	for cls in ["OptionButton"]:
-		th.set_stylebox("normal", cls, mk.call(Color(0.03, 0.05, 0.09, 0.92), Color(0.2, 0.75, 0.9, 0.85)))
-		th.set_stylebox("hover", cls, mk.call(Color(0.05, 0.1, 0.16, 0.95), CYAN, 4))
-		th.set_stylebox("pressed", cls, mk.call(Color(0.05, 0.1, 0.16, 0.95), MAGENTA, 4))
+		th.set_stylebox("normal", cls, mk.call(Color(0.15, 0.18, 0.24, 0.96), Color(0.3, 0.35, 0.44)))
+		th.set_stylebox("hover", cls, mk.call(Color(0.2, 0.24, 0.32, 0.98), CYAN, 3))
+		th.set_stylebox("pressed", cls, mk.call(Color(0.2, 0.24, 0.32, 0.98), MAGENTA, 3))
 	return th
 
 
@@ -153,12 +160,13 @@ func _build_scoreboard() -> void:
 	top.offset_right = -8
 	top.offset_top = 46
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.01, 0.02, 0.04, 0.82)
-	sb.border_color = CYAN
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(4)
+	sb.bg_color = Color(0.07, 0.09, 0.13, 0.9)
+	sb.border_color = MAGENTA
+	sb.set_border_width_all(0)
+	sb.border_width_bottom = 3
+	sb.set_corner_radius_all(6)
 	sb.set_content_margin_all(8)
-	sb.shadow_color = Color(0.3, 0.9, 1.0, 0.3)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
 	sb.shadow_size = 8
 	top.add_theme_stylebox_override("panel", sb)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
